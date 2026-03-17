@@ -813,8 +813,18 @@ footer {
   gap: 1rem;
   color: #bbb;
 }
-.pdf-placeholder-icon { font-size: 3rem; }
-.pdf-placeholder p { font-size: 0.88rem; }
+.pdf-preparing {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+}
+.pdf-preparing-sub {
+  font-size: 0.82rem;
+  color: #bbb;
+  margin-top: 0.5rem;
+}
 
 @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 @keyframes slideUp { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }

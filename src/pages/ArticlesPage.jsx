@@ -112,8 +112,8 @@ export default function ArticlesPage() {
                 <iframe src={selectedArticle.pdfUrl} title={selectedArticle.title} />
               ) : (
                 <div className="pdf-placeholder">
-                  <span className="pdf-placeholder-icon">⬚</span>
-                  <p>서버 연결 후 PDF가 표시됩니다</p>
+                  <p className="pdf-preparing">준비 중입니다</p>
+                  <p className="pdf-preparing-sub">곧 업로드될 예정입니다</p>
                 </div>
               )}
             </div>
