@@ -646,11 +646,298 @@ footer {
   .contact-col .col-value { font-size: 0.8rem; }
 }
 
-/* Page sections (GIS, Articles) */
+/* Page sections (GIS) */
 .page-section {
   min-height: 100vh;
-  padding: 160px 5vw 80px;
+  padding: 160px 6vw 80px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+/* ===== ARTICLES PAGE ===== */
+.articles-page {
+  padding: 10rem 6vw 6rem;
+}
+.articles-header {
+  max-width: 700px;
+  margin-bottom: 5rem;
+}
+.articles-list {
+  border-top: 1px solid #e0e0e0;
+}
+.article-row {
+  display: grid;
+  grid-template-columns: 3rem 1fr auto 2rem;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.6rem 0;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.article-row:hover { background: #f8f8f8; padding-left: 0.5rem; }
+.article-index {
+  font-size: 0.7rem;
+  color: #ccc;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+.article-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: #1a1a1a;
+  letter-spacing: -0.01em;
+  transition: color 0.2s ease;
+}
+.article-row:hover .article-title { color: #000; }
+.article-date {
+  font-size: 0.75rem;
+  color: #bbb;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.article-arrow {
+  font-size: 0.9rem;
+  color: #ccc;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.article-row:hover .article-arrow {
+  transform: translateX(3px);
+  color: #888;
+}
+.articles-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 3rem;
+  justify-content: center;
+}
+.page-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e0e0e0;
+  background: transparent;
+  border-radius: 3px;
+  font-size: 0.82rem;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-btn:hover:not(:disabled) {
+  border-color: #999;
+  color: #1a1a1a;
+}
+.page-btn.active {
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+  color: #fff;
+}
+.page-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* PDF Modal */
+.pdf-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+.pdf-modal {
+  background: #fff;
+  width: 90vw;
+  max-width: 900px;
+  height: 90vh;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.25s ease;
+}
+.pdf-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.8rem 2rem;
+  border-bottom: 1px solid #eee;
+  gap: 1rem;
+}
+.pdf-modal-date {
+  font-size: 0.72rem;
+  color: #bbb;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.3rem;
+}
+.pdf-modal-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #1a1a1a;
+}
+.pdf-close {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0.2rem;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+.pdf-close:hover { color: #1a1a1a; }
+.pdf-viewer {
+  flex: 1;
+  overflow: hidden;
+}
+.pdf-viewer iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+.pdf-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+  color: #bbb;
+}
+.pdf-placeholder-icon { font-size: 3rem; }
+.pdf-placeholder p { font-size: 0.88rem; }
+
+@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+/* ===== ADMIN PAGE ===== */
+.admin-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+}
+.admin-login-box {
+  width: 100%;
+  max-width: 400px;
+  padding: 3rem;
+}
+.admin-login-title {
+  font-family: 'Noto Serif KR', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 2.5rem;
+  margin-top: 0.5rem;
+}
+.admin-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10rem 6vw 6rem;
+  background: #fafafa;
+}
+.admin-upload-box {
+  width: 100%;
+  max-width: 600px;
+}
+.admin-form,
+.upload-form {
+  margin-top: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.form-label {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: #999;
+  text-transform: uppercase;
+}
+.admin-input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 3px;
+  font-size: 0.95rem;
+  font-family: 'Noto Sans KR', sans-serif;
+  background: #fff;
+  color: #1a1a1a;
+  transition: border-color 0.2s ease;
+  outline: none;
+}
+.admin-input:focus { border-color: #999; }
+.admin-input::placeholder { color: #ccc; }
+.file-upload-area {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.2rem 1rem;
+  border: 1px dashed #d0d0d0;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  background: #fff;
+  min-height: 56px;
+}
+.file-upload-area:hover { border-color: #999; background: #fafafa; }
+.file-upload-area.has-file { border-color: #ccc; border-style: solid; }
+.file-placeholder { font-size: 0.88rem; color: #bbb; }
+.file-icon { font-size: 1.2rem; color: #888; }
+.file-name { font-size: 0.88rem; color: #555; }
+.form-error {
+  font-size: 0.82rem;
+  color: #c44;
+}
+.form-success {
+  font-size: 0.82rem;
+  color: #4a9;
+}
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1a;
+  color: #fff;
+  padding: 0.9rem 2rem;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.88rem;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 0.02em;
+}
+.admin-btn:hover:not(:disabled) { background: #333; }
+.admin-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* Responsive - Articles & Admin */
+@media (max-width: 600px) {
+  .articles-page { padding: 7rem 5vw 4rem; }
+  .article-row { grid-template-columns: 2.5rem 1fr auto; gap: 0.8rem; }
+  .article-arrow { display: none; }
+  .article-title { font-size: 0.92rem; }
+  .article-date { font-size: 0.68rem; }
+  .pdf-modal { width: 100vw; height: 100dvh; border-radius: 0; }
+  .pdf-modal-title { font-size: 1rem; }
+  .admin-login-box { padding: 2rem; }
+  .admin-page { padding: 7rem 5vw 4rem; }
 }
