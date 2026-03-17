@@ -21,6 +21,11 @@ export default function Nav() {
         <li><a href="#system" onClick={closeMenu}>시스템</a></li>
         <li><a href="#projects" onClick={closeMenu}>프로젝트</a></li>
         <li><a href="#network" onClick={closeMenu}>조직</a></li>
+        <li className="nav-divider"></li>
+        <li><a href="#gis" onClick={closeMenu}>GIS</a></li>
+        <li className="nav-divider"></li>
+        <li><a href="#articles" onClick={closeMenu}>아티클</a></li>
+        <li className="nav-divider"></li>
         <li><a href="#contact" onClick={closeMenu} className="nav-cta">협업 문의</a></li>
       </ul>
       <div className="hamburger" onClick={() => setMenuOpen(!menuOpen)}>

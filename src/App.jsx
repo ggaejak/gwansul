@@ -9,6 +9,8 @@ import Partners from './components/Partners'
 import History from './components/History'
 import Projects from './components/Projects'
 import Network from './components/Network'
+import Gis from './components/Gis'
+import Articles from './components/Articles'
 import Contact from './components/Contact'
 import Footer from './components/Footer'
 
@@ -38,6 +40,8 @@ export default function App() {
       <History />
       <Projects />
       <Network />
+      <Gis />
+      <Articles />
       <Contact />
       <Footer />
     </>
