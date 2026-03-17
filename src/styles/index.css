@@ -645,3 +645,12 @@ footer {
   .contact-details { gap: 1.5rem; }
   .contact-col .col-value { font-size: 0.8rem; }
 }
+
+/* Page sections (GIS, Articles) */
+.page-section {
+  min-height: 100vh;
+  padding: 160px 5vw 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
