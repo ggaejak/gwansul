@@ -1,22 +1,7 @@
 import { useState, useEffect } from 'react'
 import Nav from '../components/Nav'
 import Footer from '../components/Footer'
-
-// TODO: 서버 연결 후 API로 교체
-const MOCK_ARTICLES = [
-  { id: 1,  title: '도시를 운영 시스템으로 — 관설의 접근 방식', date: '2025.01.14' },
-  { id: 2,  title: '충남 태안군 빈집 실태조사 현장 기록', date: '2024.12.30' },
-  { id: 3,  title: '공공 공간의 소유 구조 전환 사례 연구', date: '2024.12.10' },
-  { id: 4,  title: '도시 열섬 현상과 녹지 배치 전략', date: '2024.11.22' },
-  { id: 5,  title: 'GIS 기반 현장 데이터 수집 방법론', date: '2024.11.05' },
-  { id: 6,  title: '장기 방치 공간의 재활용 가능성 분석', date: '2024.10.18' },
-  { id: 7,  title: '도시 운영 지표 설계 — 무엇을 측정할 것인가', date: '2024.10.01' },
-  { id: 8,  title: '지방 소도시 인구 감소와 공간 재편 전략', date: '2024.09.15' },
-  { id: 9,  title: '관설 프로젝트 회고 — 2024년 상반기', date: '2024.08.28' },
-  { id: 10, title: '현장 관측에서 정책 제안까지 — 관설의 프로세스', date: '2024.08.10' },
-  { id: 11, title: '도시 데이터 시각화의 원칙', date: '2024.07.24' },
-  { id: 12, title: '빈집 활용 커뮤니티 공간 전환 사례', date: '2024.07.06' },
-]
+import ARTICLES_DATA from '../data/articles.json'
 
 const PER_PAGE = 10
 
@@ -24,8 +9,8 @@ export default function ArticlesPage() {
   const [page, setPage] = useState(1)
   const [selectedArticle, setSelectedArticle] = useState(null)
 
-  const totalPages = Math.ceil(MOCK_ARTICLES.length / PER_PAGE)
-  const currentArticles = MOCK_ARTICLES.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+  const totalPages = Math.ceil(ARTICLES_DATA.length / PER_PAGE)
+  const currentArticles = ARTICLES_DATA.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   useEffect(() => {
     const observer = new IntersectionObserver(
