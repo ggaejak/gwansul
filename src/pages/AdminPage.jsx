@@ -3,7 +3,7 @@ import Nav from '../components/Nav'
 import ARTICLES_DATA from '../data/articles.json'
 
 // TODO: 서버 연결 후 API 인증으로 교체
-const ADMIN_PASSWORD = 'gwansul2024'
+const ADMIN_PASSWORD = 'Gwansul8&'
 
 export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false)
