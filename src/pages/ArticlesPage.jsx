@@ -1,16 +1,24 @@
 import { useState, useEffect } from 'react'
 import Nav from '../components/Nav'
 import Footer from '../components/Footer'
-import ARTICLES_DATA from '../data/articles.json'
 
+const API_URL = 'https://orange-cherry-8597.gwansul743.workers.dev'
 const PER_PAGE = 10
 
 export default function ArticlesPage() {
+  const [articles, setArticles] = useState([])
   const [page, setPage] = useState(1)
   const [selectedArticle, setSelectedArticle] = useState(null)
 
-  const totalPages = Math.ceil(ARTICLES_DATA.length / PER_PAGE)
-  const currentArticles = ARTICLES_DATA.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+  useEffect(() => {
+    fetch(`${API_URL}/api/articles`)
+      .then(res => res.json())
+      .then(data => setArticles(data))
+      .catch(() => setArticles([]))
+  }, [])
+
+  const totalPages = Math.ceil(articles.length / PER_PAGE)
+  const currentArticles = articles.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -43,7 +51,9 @@ export default function ArticlesPage() {
           </div>
 
           <div className="articles-list fade-in">
-            {currentArticles.map((article, idx) => (
+            {currentArticles.length === 0 ? (
+              <p style={{ color: '#999', textAlign: 'center', padding: '3rem 0' }}>아티클이 없습니다</p>
+            ) : currentArticles.map((article, idx) => (
               <div
                 key={article.id}
                 className="article-row"

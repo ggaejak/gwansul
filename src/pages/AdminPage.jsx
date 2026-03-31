@@ -1,8 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Nav from '../components/Nav'
-import ARTICLES_DATA from '../data/articles.json'
 
-// TODO: 서버 연결 후 API 인증으로 교체
+const API_URL = 'https://orange-cherry-8597.gwansul743.workers.dev'
 const ADMIN_PASSWORD = 'Gwansul8&'
 
 export default function AdminPage() {
@@ -14,9 +13,22 @@ export default function AdminPage() {
   const [pdfFile, setPdfFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
+  const [uploadError, setUploadError] = useState('')
 
-  const [articles, setArticles] = useState(ARTICLES_DATA)
+  const [articles, setArticles] = useState([])
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const fetchArticles = () => {
+    fetch(`${API_URL}/api/articles`)
+      .then(res => res.json())
+      .then(data => setArticles(data))
+      .catch(() => setArticles([]))
+  }
+
+  useEffect(() => {
+    if (authenticated) fetchArticles()
+  }, [authenticated])
 
   const handleLogin = (e) => {
     e.preventDefault()
@@ -32,23 +44,42 @@ export default function AdminPage() {
     e.preventDefault()
     if (!title || !pdfFile) return
     setUploading(true)
-    // TODO: R2 연동 후 실제 업로드 로직으로 교체
-    setTimeout(() => {
-      setUploading(false)
+    setUploadError('')
+    try {
+      const formData = new FormData()
+      formData.append('title', title)
+      formData.append('pdf', pdfFile)
+      const res = await fetch(`${API_URL}/api/articles`, {
+        method: 'POST',
+        headers: { Authorization: ADMIN_PASSWORD },
+        body: formData,
+      })
+      if (!res.ok) throw new Error()
       setUploadDone(true)
       setTitle('')
       setPdfFile(null)
-    }, 800)
+      fetchArticles()
+    } catch {
+      setUploadError('업로드에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setUploading(false)
+    }
   }
 
-  const handleDelete = (article) => {
-    setDeleteTarget(article)
-  }
-
-  const confirmDelete = () => {
-    // TODO: R2 연동 후 실제 삭제 API 호출로 교체
-    setArticles(prev => prev.filter(a => a.id !== deleteTarget.id))
-    setDeleteTarget(null)
+  const confirmDelete = async () => {
+    setDeleting(true)
+    try {
+      await fetch(`${API_URL}/api/articles/${deleteTarget.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: ADMIN_PASSWORD },
+      })
+      setDeleteTarget(null)
+      fetchArticles()
+    } catch {
+      setDeleteTarget(null)
+    } finally {
+      setDeleting(false)
+    }
   }
 
   if (!authenticated) {
@@ -93,7 +124,7 @@ export default function AdminPage() {
               <input
                 type="text"
                 value={title}
-                onChange={e => { setTitle(e.target.value); setUploadDone(false) }}
+                onChange={e => { setTitle(e.target.value); setUploadDone(false); setUploadError('') }}
                 placeholder="아티클 제목을 입력하세요"
                 className="admin-input"
                 required
@@ -115,14 +146,13 @@ export default function AdminPage() {
                 id="pdfInput"
                 type="file"
                 accept=".pdf"
-                onChange={e => { setPdfFile(e.target.files[0]); setUploadDone(false) }}
+                onChange={e => { setPdfFile(e.target.files[0]); setUploadDone(false); setUploadError('') }}
                 style={{ display: 'none' }}
               />
             </div>
 
-            {uploadDone && (
-              <p className="form-success">업로드가 완료됐습니다 — R2 연동 후 실제 저장됩니다</p>
-            )}
+            {uploadDone && <p className="form-success">업로드가 완료됐습니다</p>}
+            {uploadError && <p className="form-error">{uploadError}</p>}
 
             <button
               type="submit"
@@ -138,7 +168,9 @@ export default function AdminPage() {
         <div className="admin-upload-box">
           <h2 className="section-title" style={{ fontSize: '1.4rem' }}>아티클 관리</h2>
           <div className="admin-article-list">
-            {articles.map((article, idx) => (
+            {articles.length === 0 ? (
+              <p style={{ color: '#999', textAlign: 'center', padding: '2rem 0' }}>등록된 아티클이 없습니다</p>
+            ) : articles.map((article, idx) => (
               <div key={article.id} className="admin-article-row">
                 <span className="article-index">{String(idx + 1).padStart(2, '0')}</span>
                 <div className="admin-article-info">
@@ -150,7 +182,7 @@ export default function AdminPage() {
                 </span>
                 <button
                   className="admin-delete-btn"
-                  onClick={() => handleDelete(article)}
+                  onClick={() => setDeleteTarget(article)}
                 >
                   삭제
                 </button>
@@ -160,7 +192,6 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* 삭제 확인 모달 */}
       {deleteTarget && (
         <div className="pdf-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="admin-confirm-modal" onClick={e => e.stopPropagation()}>
@@ -168,7 +199,9 @@ export default function AdminPage() {
             <p className="admin-confirm-title">"{deleteTarget.title}"</p>
             <div className="admin-confirm-buttons">
               <button className="admin-btn-cancel" onClick={() => setDeleteTarget(null)}>취소</button>
-              <button className="admin-btn-danger" onClick={confirmDelete}>삭제</button>
+              <button className="admin-btn-danger" onClick={confirmDelete} disabled={deleting}>
+                {deleting ? '삭제 중...' : '삭제'}
+              </button>
             </div>
           </div>
         </div>
