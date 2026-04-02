@@ -289,7 +289,7 @@ export default function GisPage() {
                 </div>
               </section>
 
-              {/* ── 슬라이더 + 통계 (sticky 고정) ── */}
+              {/* ── 슬라이더 (sticky 고정) ── */}
               <div className="g-sticky-controls">
                 <div className="g-slider-row">
                   <span className="g-slider-value">{(radius / 1000).toFixed(2)} km</span>
@@ -306,10 +306,6 @@ export default function GisPage() {
                 <div className="g-slider-labels">
                   <span>0.10 km</span>
                   <span>1.00 km</span>
-                </div>
-                <div className="g-stats-row">
-                  <Stat label="반경 내 건물" value={filtered.length} />
-                  <Stat label="도보 시간" value={`~${Math.round(radius / 80)}분`} />
                 </div>
               </div>
 
