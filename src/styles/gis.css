@@ -1,37 +1,33 @@
-/* ─── GIS Mode: Nav Override ───────────────────────────────── */
-html.gis-mode body { background: #0c0c16; overflow: hidden; }
+/* ═══════════════════════════════════════════════════════════════
+   관설 GIS — Morphocode Explorer Style (Scroll-based)
+   ═══════════════════════════════════════════════════════════════ */
 
+/* ─── GIS Mode: Nav Override ───────────────────────────────── */
+html.gis-mode body { background: #f5f5f5; overflow: hidden; }
 html.gis-mode nav,
 html.gis-mode nav.scrolled {
-  background: rgba(12, 12, 22, 0.9) !important;
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #eee !important;
   box-shadow: none !important;
 }
-html.gis-mode nav .logo          { color: #fff !important; }
-html.gis-mode nav .logo span     { color: rgba(255,255,255,0.28) !important; }
-html.gis-mode nav ul li a        { color: rgba(255,255,255,0.42) !important; }
-html.gis-mode nav ul li a:hover  { color: rgba(255,255,255,0.85) !important; }
-html.gis-mode nav ul li a::after { background: rgba(255,255,255,0.6) !important; }
-html.gis-mode .nav-cta           {
-  background: rgba(255,255,255,0.08) !important;
-  color: rgba(255,255,255,0.7) !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
+html.gis-mode nav .logo          { color: #111 !important; }
+html.gis-mode nav .logo span     { color: #bbb !important; }
+html.gis-mode nav ul li a        { color: #888 !important; }
+html.gis-mode nav ul li a:hover  { color: #111 !important; }
+html.gis-mode nav ul li a::after { background: #111 !important; }
+html.gis-mode .nav-cta {
+  background: #111 !important;
+  color: #fff !important;
+  border: none !important;
 }
-html.gis-mode .nav-cta:hover    { background: rgba(255,255,255,0.14) !important; }
-html.gis-mode .nav-divider      { background: rgba(255,255,255,0.08) !important; }
-html.gis-mode .hamburger span   { background: rgba(255,255,255,0.65) !important; }
+html.gis-mode .nav-cta:hover     { background: #333 !important; }
+html.gis-mode .nav-divider       { background: #ddd !important; }
+html.gis-mode .hamburger span    { background: #555 !important; }
 
-/* ─── Page Layout ──────────────────────────────────────────── */
-.gis-page {
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  background: #0c0c16;
-  animation: gis-fadein 0.45s ease forwards;
-}
-
-.gis-container {
+/* ─── Page ─────────────────────────────────────────────────── */
+.gis-page { width: 100vw; height: 100vh; overflow: hidden; }
+.gis-layout {
   position: fixed;
   top: 60px;
   left: 0; right: 0; bottom: 0;
@@ -39,455 +35,531 @@ html.gis-mode .hamburger span   { background: rgba(255,255,255,0.65) !important;
 }
 
 /* ─── Side Panel ───────────────────────────────────────────── */
-.gis-panel {
-  width: 320px;
+.g-panel {
+  width: 460px;
   flex-shrink: 0;
-  background: #0f0f1e;
-  border-right: 1px solid rgba(255,255,255,0.05);
+  background: #fff;
+  box-shadow: 2px 0 16px rgba(0,0,0,0.06);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
   z-index: 10;
+  overflow-y: auto;
+  scroll-behavior: smooth;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.07) transparent;
+  scrollbar-color: #ddd transparent;
 }
-.gis-panel::-webkit-scrollbar       { width: 3px; }
-.gis-panel::-webkit-scrollbar-track { background: transparent; }
-.gis-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 2px; }
+.g-panel::-webkit-scrollbar       { width: 4px; }
+.g-panel::-webkit-scrollbar-track { background: transparent; }
+.g-panel::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
 
-/* ─── Panel Header ─────────────────────────────────────────── */
-.panel-header {
-  padding: 1.8rem 1.6rem 1.4rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-.panel-badge {
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  color: rgba(255,255,255,0.2);
-  text-transform: uppercase;
-  margin-bottom: 0.5rem;
-}
-.panel-title {
-  font-family: 'Noto Serif KR', serif;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -0.03em;
-  margin-bottom: 0.2rem;
-}
-.panel-subtitle {
-  font-size: 0.68rem;
-  color: rgba(255,255,255,0.25);
-  letter-spacing: 0.06em;
-}
-
-/* ─── Layer List ───────────────────────────────────────────── */
-.layer-list {
-  padding: 0.6rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-}
-.layer-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.7rem 1.6rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  transition: background 0.16s;
-  position: relative;
-  font-family: 'Noto Sans KR', sans-serif;
-}
-.layer-item:hover        { background: rgba(255,255,255,0.03); }
-.layer-item.active       { background: rgba(255,255,255,0.05); }
-.layer-item.active::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 2px;
-  background: var(--accent);
-  border-radius: 0 2px 2px 0;
-}
-.layer-num {
-  font-size: 0.62rem;
-  color: rgba(255,255,255,0.18);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  min-width: 18px;
-  transition: color 0.16s;
-}
-.layer-item.active .layer-num   { color: var(--accent); }
-.layer-info { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
-.layer-label {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: rgba(255,255,255,0.45);
-  letter-spacing: -0.01em;
-  transition: color 0.16s;
-}
-.layer-item.active .layer-label { color: rgba(255,255,255,0.92); }
-.layer-sub {
-  font-size: 0.62rem;
-  color: rgba(255,255,255,0.2);
-  letter-spacing: 0.02em;
-}
-.layer-dot {
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.08);
-  transition: background 0.16s;
+/* ─── Header ───────────────────────────────────────────────── */
+.g-header {
+  padding: 24px 24px 20px;
+  border-bottom: 1px solid #e0e0e0;
   flex-shrink: 0;
 }
-.layer-item.active .layer-dot { background: var(--accent); }
+.g-header-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #bbb;
+  margin-bottom: 6px;
+}
+.g-header-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.02em;
+  margin: 0 0 2px;
+}
+.g-header-sub {
+  font-size: 14px;
+  color: #999;
+  margin: 0;
+}
 
-/* ─── Radius Selector ──────────────────────────────────────── */
-.radius-selector {
-  padding: 0.9rem 1.6rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+/* ─── Sections ─────────────────────────────────────────────── */
+.g-sections { padding-bottom: 40px; }
+
+/* ─── Section active/inactive ──────────────────────────────── */
+.g-sec {
+  padding: 24px;
+  opacity: 0.3;
+  transition: opacity 0.3s ease;
+}
+.g-sec.active {
+  opacity: 1;
+}
+.g-sec-no-pad-bottom {
+  padding-bottom: 0;
+}
+
+/* ─── Sticky Controls ─────────────────────────────────────── */
+.g-sticky-controls {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fff;
+  padding: 16px 24px 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+/* ─── Building Age ─────────────────────────────────────────── */
+.g-divider-thin {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 16px 0;
+}
+.g-age-note {
+  font-size: 11px;
+  color: #aaa;
+  margin: 4px 0 0;
+}
+.g-age-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.g-age-legend-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 6px;
+  font-size: 13px;
+  color: #777;
 }
-.radius-label {
-  font-size: 0.65rem;
-  color: rgba(255,255,255,0.25);
-  letter-spacing: 0.06em;
+.g-age-legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+/* ─── Transit ──────────────────────────────────────────────── */
+.g-transit-group { margin-bottom: 4px; }
+.g-transit-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.g-transit-icon {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.g-transit-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+.g-transit-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.g-transit-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.g-transit-line-badge {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+.g-transit-stations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.g-transit-station-tag {
+  font-size: 11px;
+  color: #666;
+  background: #f5f5f5;
+  border: 1px solid #eee;
+  border-radius: 3px;
+  padding: 2px 6px;
   white-space: nowrap;
 }
-.radius-options { display: flex; gap: 0.4rem; flex: 1; }
-.radius-btn {
-  flex: 1;
+
+/* ─── Commerce ─────────────────────────────────────────────── */
+.g-commerce-tags {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
-  padding: 0.45rem 0;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 5px;
-  cursor: pointer;
-  transition: all 0.16s;
-  font-family: 'Noto Sans KR', sans-serif;
-  color: rgba(255,255,255,0.4);
-  font-size: 0.78rem;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.g-commerce-tag {
+  font-size: 11px;
   font-weight: 500;
+  padding: 3px 8px;
+  border: 1px solid;
+  border-radius: 4px;
+  background: #fff;
 }
-.radius-btn:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.7); }
-.radius-btn.active {
-  background: rgba(255,255,255,0.07);
-  border-color: var(--accent);
-  color: #fff;
+.g-commerce-label {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
-.radius-walk {
-  font-size: 0.58rem;
-  color: rgba(255,255,255,0.25);
-  font-weight: 400;
-  letter-spacing: 0.03em;
-}
-.radius-btn.active .radius-walk { color: var(--accent); }
-
-/* ─── Analysis Area ────────────────────────────────────────── */
-.analysis-area { flex: 1; padding: 1.2rem; }
-
-.analysis-hint {
-  text-align: center;
-  padding: 2.5rem 1rem;
-  color: rgba(255,255,255,0.15);
-}
-.hint-icon {
-  font-size: 2rem;
-  margin-bottom: 0.75rem;
-  animation: gis-pulse 2.5s ease-in-out infinite;
+.g-commerce-label span {
   display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111;
+  white-space: nowrap;
+  text-shadow: 0 0 4px #fff, 0 0 4px #fff, 0 0 4px #fff, 0 0 4px #fff;
+  text-align: center;
+  letter-spacing: -0.02em;
 }
-.analysis-hint p { font-size: 0.76rem; line-height: 1.7; color: rgba(255,255,255,0.2); }
 
-.analysis-loading {
+/* ─── Commerce Sales List ──────────────────────────────────── */
+.g-commerce-sales-list {
   display: flex;
   flex-direction: column;
+  gap: 0;
+  margin-top: 10px;
+}
+.g-commerce-sales-item {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+.g-commerce-sales-item:last-child { border-bottom: none; }
+.g-commerce-sales-header {
+  display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 2.5rem 1rem;
-  color: rgba(255,255,255,0.3);
-  font-size: 0.76rem;
-  letter-spacing: 0.04em;
+  gap: 6px;
+  margin-bottom: 3px;
 }
-.loading-spinner {
-  width: 24px; height: 24px;
-  border: 2px solid rgba(255,255,255,0.07);
-  border-radius: 50%;
-  animation: gis-spin 0.7s linear infinite;
-}
-.analysis-error {
-  font-size: 0.76rem;
-  color: rgba(248, 113, 113, 0.8);
-  padding: 1rem 0;
-}
-
-/* ─── Result Card ──────────────────────────────────────────── */
-.result-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 8px;
-  padding: 1.2rem;
-}
-.result-heading {
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.22);
-  margin-bottom: 1rem;
-}
-.result-sub-heading {
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.2);
-  margin-bottom: 0.5rem;
-}
-.result-metric  { margin-bottom: 1.1rem; }
-.metric-value {
-  font-size: 2.6rem;
-  font-weight: 700;
-  letter-spacing: -0.05em;
-  line-height: 1;
-}
-.metric-unit  {
-  font-size: 0.95rem;
-  color: rgba(255,255,255,0.3);
-  margin-left: 0.2rem;
-  font-weight: 300;
-}
-.metric-label {
-  font-size: 0.65rem;
-  color: rgba(255,255,255,0.25);
-  margin-top: 0.45rem;
-  letter-spacing: 0.04em;
-}
-.result-note  {
-  font-size: 0.62rem;
-  color: rgba(255,255,255,0.15);
-  margin-top: 0.9rem;
-  letter-spacing: 0.04em;
-}
-.result-empty {
-  font-size: 0.76rem;
-  color: rgba(255,255,255,0.18);
-  padding: 0.5rem 0 1rem;
-}
-.result-divider {
-  height: 1px;
-  background: rgba(255,255,255,0.05);
-  margin: 0.9rem 0;
-}
-
-/* ─── Solid/Void Bar ───────────────────────────────────────── */
-.solid-void { margin-bottom: 0.5rem; }
-.sv-bar {
-  height: 4px;
-  background: rgba(255,255,255,0.06);
+.g-commerce-sales-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 0.4rem;
+  flex-shrink: 0;
 }
-.sv-solid { height: 100%; border-radius: 2px; transition: width 0.8s cubic-bezier(.25,1,.5,1); }
-.sv-labels {
+.g-commerce-sales-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+.g-commerce-sales-row {
   display: flex;
   justify-content: space-between;
-  font-size: 0.65rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  align-items: center;
+  padding-left: 14px;
 }
-.sv-void-label { color: rgba(255,255,255,0.25); }
-
-/* ─── Rings ────────────────────────────────────────────────── */
-.result-rings { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem; }
-.ring-row     { display: flex; align-items: center; gap: 0.75rem; }
-.ring-bar {
-  flex: 1; height: 3px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 2px; overflow: hidden;
-}
-.ring-fill {
-  height: 100%; border-radius: 2px;
-  transition: width 0.8s cubic-bezier(.25,1,.5,1);
-}
-.ring-label {
-  font-size: 0.62rem;
-  color: rgba(255,255,255,0.22);
-  min-width: 34px;
-  text-align: right;
-  font-family: monospace;
-}
-
-/* ─── Demographics ─────────────────────────────────────────── */
-.demo-row {
-  display: flex;
-  gap: 0.75rem;
-  margin-bottom: 0.25rem;
-}
-.demo-stat {
-  flex: 1;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
-}
-.demo-value {
-  font-size: 1.1rem;
+.g-commerce-sales-value {
+  font-size: 18px;
   font-weight: 700;
-  color: rgba(255,255,255,0.8);
-  letter-spacing: -0.03em;
+  color: #111;
+  letter-spacing: -0.02em;
 }
-.demo-label {
-  font-size: 0.6rem;
-  color: rgba(255,255,255,0.25);
-  margin-top: 0.2rem;
+.g-commerce-sales-meta {
+  font-size: 12px;
+  color: #aaa;
+}
+
+/* ─── Bus Dot (fixed size, zoom-independent) ──────────────── */
+.g-bus-dot {
+  border-radius: 50%;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 2px rgba(0,0,0,0.2);
+}
+.g-bus-dot.inside {
+  background: #1a56db;
+  opacity: 1;
+}
+.g-bus-dot.outside {
+  background: #1a56db;
+  opacity: 0.12;
+}
+
+/* ─── Station Label ────────────────────────────────────────── */
+.g-station-label {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.g-station-label span {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+}
+
+/* ─── Drag Overlay ────────────────────────────────────────── */
+.g-drag-overlay { cursor: grab; }
+.g-drag-overlay:active { cursor: grabbing; }
+
+.g-section-divider {
+  height: 1px;
+  background: #e0e0e0;
+  margin: 0;
+}
+
+.g-sec-header { margin-bottom: 16px; }
+.g-sec-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.01em;
+  margin: 0 0 3px;
+}
+.g-sec-desc {
+  font-size: 14px;
+  color: #aaa;
+  margin: 0;
   letter-spacing: 0.02em;
-  line-height: 1.3;
 }
 
-/* ─── Transit list ─────────────────────────────────────────── */
-.transit-list { display: flex; flex-direction: column; gap: 0.3rem; }
-.transit-item {
-  display: flex; align-items: center; gap: 0.55rem;
-  font-size: 0.73rem;
-  color: rgba(255,255,255,0.5);
-  padding: 0.3rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+/* ─── Slider ───────────────────────────────────────────────── */
+.g-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
 }
-.transit-dot  { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.transit-name { flex: 1; }
-.transit-type { font-size: 0.6rem; color: rgba(255,255,255,0.22); letter-spacing: 0.04em; }
+.g-slider-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+  min-width: 70px;
+  letter-spacing: -0.02em;
+}
+.g-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.g-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #111;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.g-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.g-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #111;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.g-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #bbb;
+  margin-bottom: 16px;
+  padding: 0 2px;
+}
 
-/* ─── Score bar ────────────────────────────────────────────── */
-.score-section { margin-top: 0.75rem; }
-.score-label   {
-  font-size: 0.62rem;
-  color: rgba(255,255,255,0.25);
-  letter-spacing: 0.05em;
-  margin-bottom: 0.35rem;
+/* ─── Stats Row ────────────────────────────────────────────── */
+.g-stats-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
 }
-.score-bar  {
-  height: 3px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 2px; overflow: hidden;
+.g-stat {
+  flex: 1;
+  padding: 10px 12px;
+  background: #fafafa;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
 }
-.score-fill {
-  height: 100%; border-radius: 2px;
-  transition: width 1s cubic-bezier(.25,1,.5,1);
+.g-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+.g-stat-label {
+  font-size: 12px;
+  color: #aaa;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Sub Title ────────────────────────────────────────────── */
+.g-sub-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #bbb;
+  margin: 16px 0 8px;
 }
 
 /* ─── Chart ────────────────────────────────────────────────── */
-.chart-wrap { margin-top: 0.6rem; }
-.chart-wrap .recharts-tooltip-wrapper { z-index: 9999; }
+.g-chart { margin-bottom: 4px; }
+.g-tooltip {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 6px 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.g-tooltip-label { font-size: 10px; color: #999; }
+.g-tooltip-value { font-size: 13px; font-weight: 600; color: #111; }
+
+/* ─── Solid/Void Bar ───────────────────────────────────────── */
+.g-sv-bar {
+  height: 8px;
+  background: #e5e5e5;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+}
+.g-sv-fill {
+  height: 100%;
+  background: #111;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+.g-sv-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #888;
+  margin-top: 6px;
+  font-weight: 500;
+}
+
+/* ─── Bar List (Land Use) ──────────────────────────────────── */
+.g-bar-list { display: flex; flex-direction: column; gap: 10px; }
+.g-bar-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.g-bar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.g-bar-name { flex: 1; font-size: 14px; color: #555; }
+.g-bar-count { font-size: 13px; color: #aaa; font-weight: 500; }
+.g-bar-track {
+  height: 6px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.g-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* ─── Entropy Box ──────────────────────────────────────────── */
+.g-entropy-box {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 20px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
+}
+.g-entropy-label {
+  font-size: 11px;
+  color: #999;
+  letter-spacing: 0.02em;
+}
+.g-entropy-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.03em;
+}
+.g-entropy-max {
+  font-size: 15px;
+  color: #ccc;
+}
+.g-entropy-note {
+  font-size: 13px;
+  color: #bbb;
+  margin-top: 6px;
+}
+
+/* ─── Coming Soon ──────────────────────────────────────────── */
+.g-coming-soon {
+  padding: 40px 0;
+  text-align: center;
+  color: #ccc;
+  font-size: 13px;
+}
+
+/* ─── Empty State ──────────────────────────────────────────── */
+.g-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+  color: #bbb;
+  font-size: 13px;
+  line-height: 1.7;
+  flex: 1;
+}
+.g-empty-icon {
+  font-size: 36px;
+  color: #ddd;
+  margin-bottom: 12px;
+}
 
 /* ─── Map ──────────────────────────────────────────────────── */
-.gis-map { flex: 1; position: relative; }
-.gis-map .leaflet-container {
+.g-map { flex: 1; position: relative; }
+.g-map .leaflet-container {
   width: 100%; height: 100%;
-  cursor: crosshair; background: #0c0c16;
+  cursor: crosshair;
+  background: #f5f5f5;
 }
-.gis-map .leaflet-control-zoom { border: none !important; box-shadow: none !important; }
-.gis-map .leaflet-control-zoom a {
-  background: rgba(12,12,22,0.88) !important;
-  backdrop-filter: blur(8px);
-  color: rgba(255,255,255,0.55) !important;
-  border: 1px solid rgba(255,255,255,0.09) !important;
+.g-map .leaflet-control-zoom { border: none !important; box-shadow: none !important; }
+.g-map .leaflet-control-zoom a {
+  background: rgba(255,255,255,0.92) !important;
+  color: #555 !important;
+  border: 1px solid #ddd !important;
   border-radius: 4px !important;
   margin-bottom: 2px !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08) !important;
 }
-.gis-map .leaflet-control-zoom a:hover {
-  background: rgba(25,25,45,0.95) !important;
-  color: #fff !important;
+.g-map .leaflet-control-zoom a:hover {
+  background: #fff !important;
+  color: #111 !important;
 }
-.gis-map .leaflet-control-attribution {
-  background: rgba(0,0,0,0.4) !important;
-  color: rgba(255,255,255,0.2) !important;
-  font-size: 0.52rem !important;
+.g-map .leaflet-control-attribution {
+  background: rgba(255,255,255,0.7) !important;
+  color: #aaa !important;
+  font-size: 9px !important;
 }
-.gis-map .leaflet-control-attribution a { color: rgba(255,255,255,0.28) !important; }
-
-.map-hint {
-  position: absolute;
-  bottom: 2.5rem; left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,0.09);
-  color: rgba(255,255,255,0.5);
-  padding: 0.5rem 1.1rem;
-  border-radius: 2rem;
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  pointer-events: none;
-  z-index: 999;
-  white-space: nowrap;
-  animation: gis-float 3s ease-in-out infinite;
-}
-
-.coords-display {
-  position: absolute;
-  bottom: 1.4rem; right: 1.4rem;
-  background: rgba(0,0,0,0.48);
-  color: rgba(255,255,255,0.28);
-  padding: 0.3rem 0.7rem;
-  border-radius: 4px;
-  font-size: 0.65rem;
-  font-family: monospace;
-  letter-spacing: 0.04em;
-  z-index: 999;
-  pointer-events: none;
-}
-
-/* ─── Animations ────────────────────────────────────────────── */
-@keyframes gis-fadein {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-@keyframes gis-spin  { to { transform: rotate(360deg); } }
-@keyframes gis-pulse {
-  0%, 100% { opacity: 0.2; transform: scale(1); }
-  50%       { opacity: 0.6; transform: scale(1.08); }
-}
-@keyframes gis-float {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50%       { transform: translateX(-50%) translateY(-5px); }
-}
-
-/* ─── Mobile ────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .gis-container    { flex-direction: column-reverse; }
-  .gis-panel {
-    width: 100%; height: 48vh;
-    border-right: none;
-    border-top: 1px solid rgba(255,255,255,0.07);
-  }
-  .layer-list {
-    display: flex; flex-direction: row;
-    overflow-x: auto; padding: 0.4rem;
-    gap: 0.2rem; flex-shrink: 0;
-  }
-  .layer-item {
-    flex-direction: column;
-    padding: 0.45rem 0.65rem;
-    gap: 0.15rem; min-width: 72px;
-    align-items: flex-start;
-    border-radius: 5px;
-  }
-  .layer-item.active::before {
-    top: 0; left: 0; right: 0; bottom: auto;
-    width: auto; height: 2px;
-    border-radius: 2px 2px 0 0;
-  }
-  .layer-sub { display: none; }
-  .layer-dot { display: none; }
-  .gis-map   { height: 52vh; flex: none; }
-  .map-hint  { bottom: 1rem; font-size: 0.62rem; }
-  .radius-selector { padding: 0.6rem 1rem; }
-}
+.g-map .leaflet-control-attribution a { color: #999 !important; }

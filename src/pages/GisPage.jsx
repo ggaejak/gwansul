@@ -1,517 +1,461 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
-  MapContainer, TileLayer, useMapEvents,
-  GeoJSON, CircleMarker, Popup, ZoomControl
+  MapContainer, TileLayer, GeoJSON, ZoomControl, Circle, Marker, useMapEvents, useMap
 } from 'react-leaflet'
+import L from 'leaflet'
 import * as turf from '@turf/turf'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Cell, PieChart, Pie, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  Cell, PieChart, Pie, Legend
 } from 'recharts'
 import Nav from '../components/Nav'
 import 'leaflet/dist/leaflet.css'
 import '../styles/gis.css'
 
-// ─── 서울 중구 ──────────────────────────────────────────────────
-const CENTER     = [37.5636, 126.9975]
-const JUNG_GU_BOUNDS = [[37.5417, 126.9574], [37.5868, 127.0302]]
+const CENTER = [37.5636, 126.9976]
+const BOUNDS = [[37.53, 126.95], [37.60, 127.04]]
 
-const RADIUS_OPTIONS = [
-  { label: '5분', value: 400,  walk: '05:00' },
-  { label: '10분', value: 800, walk: '10:00' },
+// ─── 색상 ──────────────────────────────────────────────────────
+function getVlRatColor(v) {
+  if (!v || v <= 0) return '#ccc'
+  if (v <= 100) return '#2166ac'
+  if (v <= 300) return '#67a9cf'
+  if (v <= 500) return '#ef8a62'
+  return '#b2182b'
+}
+
+const PURPS_COLORS = {
+  '단독주택': '#fbbf24', '공동주택': '#f59e0b', '제1종근린생활시설': '#fb923c',
+  '제2종근린생활시설': '#f97316', '업무시설': '#60a5fa', '판매시설': '#f472b6',
+  '숙박시설': '#a78bfa', '교육연구시설': '#34d399', '의료시설': '#2dd4bf',
+  '문화및집회시설': '#e879f9', '종교시설': '#c084fc', '운동시설': '#4ade80',
+  '공장': '#94a3b8', '창고시설': '#64748b',
+}
+function getPurpsColor(p) {
+  for (const [k, c] of Object.entries(PURPS_COLORS)) { if (p && p.includes(k)) return c }
+  return '#94a3b8'
+}
+
+function calcEntropy(counts) {
+  const vals = Object.values(counts).filter(v => v > 0)
+  const total = vals.reduce((s, v) => s + v, 0)
+  if (!total || vals.length <= 1) return 0
+  let H = 0
+  for (const v of vals) { const p = v / total; H -= p * Math.log(p) }
+  return +(H / Math.log(vals.length)).toFixed(2)
+}
+
+// ─── 건물 연령 ──────────────────────────────────────────────────
+function getBuildYear(props) {
+  const d = props.useAprDay
+  if (!d || typeof d !== 'string') return 0
+  const y = parseInt(d.substring(0, 4))
+  return (y >= 1900 && y <= 2030) ? y : 0
+}
+
+function getAgeColor(year) {
+  if (!year) return '#ccc'
+  if (year >= 2020) return '#2166ac'
+  if (year >= 2000) return '#67a9cf'
+  if (year >= 1980) return '#f7f7f7'
+  if (year >= 1960) return '#ef8a62'
+  return '#b2182b'
+}
+
+const AGE_BUCKETS = [
+  { label: '~1960', min: 0, max: 1959, color: '#b2182b' },
+  { label: '1960s', min: 1960, max: 1969, color: '#d6604d' },
+  { label: '1970s', min: 1970, max: 1979, color: '#ef8a62' },
+  { label: '1980s', min: 1980, max: 1989, color: '#fddbc7' },
+  { label: '1990s', min: 1990, max: 1999, color: '#f7f7f7' },
+  { label: '2000s', min: 2000, max: 2009, color: '#d1e5f0' },
+  { label: '2010s', min: 2010, max: 2019, color: '#67a9cf' },
+  { label: '2020s~', min: 2020, max: 9999, color: '#2166ac' },
 ]
 
-// ─── 6 레이어 ───────────────────────────────────────────────────
-const LAYERS = [
-  { id: 'pedshed',    num: '01', label: '도보권',      sub: '이동 가능 영역',   color: '#5eead4' },
-  { id: 'figground',  num: '02', label: '피겨그라운드', sub: '건물 · 공지 분포', color: '#e2e8f0' },
-  { id: 'landuse',    num: '03', label: '토지 이용',   sub: '기능별 면적 분포', color: '#86efac' },
-  { id: 'transit',    num: '04', label: '대중교통',    sub: '지하철 · 버스',    color: '#a5b4fc' },
-  { id: 'demo',       num: '05', label: '인구통계',    sub: '인구 · 연령 구성', color: '#fca5a5' },
-  { id: 'intensity',  num: '06', label: '개발강도',    sub: '층수 · 밀도',      color: '#fde68a' },
-]
-
-const CHART_COLORS = ['#5eead4','#a5b4fc','#fb923c','#86efac','#f472b6','#fbbf24','#60a5fa','#e879f9']
-
-// ─── 서울 중구 통계 (2023 기준) ────────────────────────────────
-const JUNG_GU_STATS = {
-  population: 124157,
-  areaSqKm: 9.96,
-  density: 12466,
-  ageGroups: [
-    { label: '0–14세',  value: 9.2  },
-    { label: '15–29세', value: 16.8 },
-    { label: '30–44세', value: 21.3 },
-    { label: '45–59세', value: 22.4 },
-    { label: '60–74세', value: 18.1 },
-    { label: '75세+',   value: 12.2 },
-  ],
-  foreignerRatio: 10.6,
-  foreigners: 13200,
+function getCentroid(f) {
+  if (f._c) return f._c
+  try { f._c = turf.centroid(f).geometry.coordinates; return f._c } catch { return null }
 }
 
-// ─── 토지이용 색상 ──────────────────────────────────────────────
-const LANDUSE_COLOR = {
-  residential:       '#fb923c',
-  commercial:        '#60a5fa',
-  retail:            '#a78bfa',
-  industrial:        '#f87171',
-  park:              '#4ade80',
-  green:             '#86efac',
-  cemetery:          '#94a3b8',
-  education:         '#fde68a',
-  religious:         '#e879f9',
-  recreation_ground: '#34d399',
-}
-function getLandUseColor(type) {
-  return LANDUSE_COLOR[type] || '#888'
-}
+// ─── 섹션 ID ────────────────────────────────────────────────────
+const SECTIONS = ['pedshed', 'intensity', 'figground', 'landuse', 'transit', 'demo']
 
-// ─── 층수 → 색상 ────────────────────────────────────────────────
-function getHeightColor(levels) {
-  const n = parseInt(levels) || 1
-  if (n <= 2)  return '#fde68a'
-  if (n <= 5)  return '#fb923c'
-  if (n <= 10) return '#f97316'
-  return '#dc2626'
-}
-
-// ─── Overpass ──────────────────────────────────────────────────
-const OVERPASS = 'https://overpass-api.de/api/interpreter'
-async function fetchOverpass(query) {
-  const res = await fetch(OVERPASS, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'data=' + encodeURIComponent(query),
-  })
-  if (!res.ok) throw new Error(`Overpass ${res.status}`)
-  return res.json()
-}
-
-// OSM way + geometry → GeoJSON FeatureCollection
-function osmToGeoJSON(elements) {
-  const features = elements
-    .filter(el => el.type === 'way' && el.geometry?.length >= 3)
-    .map(el => ({
-      type: 'Feature',
-      geometry: {
-        type: 'Polygon',
-        coordinates: [el.geometry.map(p => [p.lon, p.lat])],
-      },
-      properties: el.tags || {},
-    }))
-  return { type: 'FeatureCollection', features }
-}
-
-// ─── Shannon 엔트로피 ──────────────────────────────────────────
-function entropy(counts) {
-  const total = Object.values(counts).reduce((a, b) => a + b, 0)
-  if (!total) return 0
-  const H = Object.values(counts).reduce((h, c) => {
-    if (!c) return h
-    const p = c / total
-    return h - p * Math.log(p)
-  }, 0)
-  const maxH = Math.log(Math.max(Object.keys(counts).length, 1))
-  return maxH ? +(H / maxH).toFixed(2) : 0
-}
-
-// ─── 도보권 버퍼 ───────────────────────────────────────────────
-function buildShed(lat, lng, radiusM) {
-  return turf.buffer(turf.point([lng, lat]), radiusM / 1000, { units: 'kilometers', steps: 72 })
-}
-
-// ─── 레이어별 분석 ────────────────────────────────────────────
-async function analyzePedshed(lat, lng, radius) {
-  const shed = buildShed(lat, lng, radius)
-  return { areaSqm: turf.area(shed) }
-}
-
-async function analyzeFigGround(lat, lng, radius) {
-  const q = `[out:json][timeout:25];way["building"](around:${radius},${lat},${lng});out geom;`
-  const data = await fetchOverpass(q)
-  const elements = data.elements || []
-  const geoJSON = osmToGeoJSON(elements)
-  const shed = buildShed(lat, lng, radius)
-  const shedArea = turf.area(shed)
-  const builtArea = geoJSON.features.reduce((sum, f) => sum + turf.area(f), 0)
-  const solidRatio = Math.min(1, builtArea / shedArea)
-  return { geoJSON, count: elements.length, solidRatio, voidRatio: 1 - solidRatio, builtArea }
-}
-
-async function analyzeLanduse(lat, lng, radius) {
-  const q = `[out:json][timeout:25];way["landuse"](around:${radius},${lat},${lng});out geom;`
-  const data = await fetchOverpass(q)
-  const elements = data.elements || []
-  const geoJSON = osmToGeoJSON(elements)
-  const counts = {}
-  elements.forEach(el => {
-    const t = el.tags?.landuse || 'other'
-    counts[t] = (counts[t] || 0) + 1
-  })
-  const entropyScore = entropy(counts)
-  const breakdown = Object.entries(counts)
-    .map(([type, value]) => ({ name: mapLanduse(type), value, type }))
-    .sort((a, b) => b.value - a.value)
-  return { geoJSON, breakdown, entropyScore, total: elements.length }
-}
-
-async function analyzeTransit(lat, lng, radius) {
-  const q = `[out:json][timeout:20];
-(
-  node["railway"="station"](around:${radius},${lat},${lng});
-  node["railway"="subway_entrance"](around:${radius},${lat},${lng});
-  node["highway"="bus_stop"](around:${radius},${lat},${lng});
-);out body;`
-  const data = await fetchOverpass(q)
-  const nodes = data.elements || []
-  const subway = nodes.filter(n => n.tags?.railway === 'station' || n.tags?.railway === 'subway_entrance')
-  const bus    = nodes.filter(n => n.tags?.highway === 'bus_stop')
-  return { nodes, subway, bus, total: nodes.length }
-}
-
-async function analyzeDemo(lat, lng, radius) {
-  // 서울 중구 전체 통계 + 반경 내 추정
-  const shed = buildShed(lat, lng, radius)
-  const shedArea = turf.area(shed) / 1_000_000 // km²
-  const ratio = shedArea / JUNG_GU_STATS.areaSqKm
-  return {
-    ...JUNG_GU_STATS,
-    estimatedPop: Math.round(JUNG_GU_STATS.population * Math.min(1, ratio * 1.2)),
-    shedAreaSqKm: +shedArea.toFixed(3),
-  }
-}
-
-async function analyzeIntensity(lat, lng, radius) {
-  const q = `[out:json][timeout:25];way["building"](around:${radius},${lat},${lng});out tags geom;`
-  const data = await fetchOverpass(q)
-  const elements = data.elements || []
-  const geoJSON = {
-    type: 'FeatureCollection',
-    features: elements
-      .filter(el => el.type === 'way' && el.geometry?.length >= 3)
-      .map(el => ({
-        type: 'Feature',
-        geometry: { type: 'Polygon', coordinates: [el.geometry.map(p => [p.lon, p.lat])] },
-        properties: { levels: parseInt(el.tags?.['building:levels']) || 1, ...el.tags },
-      })),
-  }
-  const buckets = { '1–2층': 0, '3–5층': 0, '6–10층': 0, '11층+': 0 }
-  elements.forEach(el => {
-    const n = parseInt(el.tags?.['building:levels']) || 1
-    if (n <= 2) buckets['1–2층']++
-    else if (n <= 5) buckets['3–5층']++
-    else if (n <= 10) buckets['6–10층']++
-    else buckets['11층+']++
-  })
-  const highrise = elements.filter(el => (parseInt(el.tags?.['building:levels']) || 1) > 5).length
-  const breakdown = Object.entries(buckets).map(([name, value]) => ({ name, value }))
-  return { geoJSON, breakdown, total: elements.length, highRiseRatio: elements.length ? highrise / elements.length : 0 }
-}
-
-// ─── 분류 매핑 ─────────────────────────────────────────────────
-const LANDUSE_LABELS = {
-  residential:'주거', commercial:'상업', retail:'판매', industrial:'산업',
-  park:'공원', green:'녹지', cemetery:'묘지', education:'교육',
-  religious:'종교', recreation_ground:'여가', military:'군사',
-}
-function mapLanduse(raw) { return LANDUSE_LABELS[raw] || raw }
-
-// ─── 지도 클릭 핸들러 ──────────────────────────────────────────
-function MapClickHandler({ onMapClick }) {
-  useMapEvents({ click: e => onMapClick(e.latlng.lat, e.latlng.lng) })
+function MapClick({ onClick }) {
+  useMapEvents({ click: e => onClick([e.latlng.lat, e.latlng.lng]) })
   return null
 }
 
-// ─── 툴팁 ─────────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label }) {
+function ChartTip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
-    <div style={{
-      background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.1)',
-      borderRadius: 6, padding: '0.45rem 0.7rem', fontSize: 12, color: '#fff',
-    }}>
-      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, marginBottom: 2 }}>{label}</div>
-      <div style={{ fontWeight: 600 }}>{payload[0].value}{payload[0].unit || ''}</div>
+    <div className="g-tooltip">
+      <div className="g-tooltip-label">{label}</div>
+      <div className="g-tooltip-value">{payload[0].value}</div>
     </div>
   )
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  메인 컴포넌트
-// ═══════════════════════════════════════════════════════════════
 export default function GisPage() {
-  const [activeLayer, setActiveLayer]   = useState('pedshed')
-  const [radius, setRadius]             = useState(400)
+  const [buildingData, setBuildingData] = useState(null)
+  const [transitData, setTransitData] = useState(null)
+  const [demoData, setDemoData] = useState(null)
+  const [commerceData, setCommerceData] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [clickedPoint, setClickedPoint] = useState(null)
-  const [shedGeoJSON, setShedGeoJSON]   = useState(null)
-  const [mapOverlay, setMapOverlay]     = useState(null)   // GeoJSON on map
-  const [transitNodes, setTransitNodes] = useState([])
-  const [analysisData, setAnalysisData] = useState(null)
-  const [isLoading, setIsLoading]       = useState(false)
+  const [radius, setRadius] = useState(400)
+  const [visibleSection, setVisibleSection] = useState('intensity')
+  const [ageFilterYear, setAgeFilterYear] = useState(2025)
+  const geoRef = useRef(null)
+  const panelRef = useRef(null)
 
   useEffect(() => {
     document.documentElement.classList.add('gis-mode')
     return () => document.documentElement.classList.remove('gis-mode')
   }, [])
 
-  const layerConfig = LAYERS.find(l => l.id === activeLayer)
-
-  const runAnalysis = useCallback(async (lat, lng, layer, r) => {
-    setIsLoading(true)
-    setAnalysisData(null)
-    setMapOverlay(null)
-    setTransitNodes([])
-    setShedGeoJSON(buildShed(lat, lng, r))
-
-    try {
-      let data = null
-      switch (layer) {
-        case 'pedshed': {
-          data = await analyzePedshed(lat, lng, r)
-          break
-        }
-        case 'figground': {
-          data = await analyzeFigGround(lat, lng, r)
-          setMapOverlay(data.geoJSON)
-          break
-        }
-        case 'landuse': {
-          data = await analyzeLanduse(lat, lng, r)
-          setMapOverlay(data.geoJSON)
-          break
-        }
-        case 'transit': {
-          data = await analyzeTransit(lat, lng, r)
-          setTransitNodes(data.nodes)
-          break
-        }
-        case 'demo': {
-          data = await analyzeDemo(lat, lng, r)
-          break
-        }
-        case 'intensity': {
-          data = await analyzeIntensity(lat, lng, r)
-          setMapOverlay(data.geoJSON)
-          break
-        }
-      }
-      setAnalysisData(data)
-    } catch (err) {
-      console.error(err)
-      setAnalysisData({ error: '데이터를 불러오지 못했습니다.' })
-    } finally {
-      setIsLoading(false)
-    }
+  useEffect(() => {
+    Promise.all([
+      fetch(new URL('../gis/data/junggu-buildings-final-lite.geojson', import.meta.url)).then(r => r.json()),
+      fetch(new URL('../gis/data/junggu-transit.json', import.meta.url)).then(r => r.json()),
+      fetch(new URL('../gis/data/junggu-demographics.json', import.meta.url)).then(r => r.json()),
+      fetch(new URL('../gis/data/junggu-commerce.json', import.meta.url)).then(r => r.json()),
+    ]).then(([buildings, transit, demo, commerce]) => {
+      setBuildingData(buildings)
+      setTransitData(transit)
+      setDemoData(demo)
+      setCommerceData(commerce)
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
-  const handleMapClick = useCallback((lat, lng) => {
-    setClickedPoint({ lat, lng })
-    runAnalysis(lat, lng, activeLayer, radius)
-  }, [activeLayer, radius, runAnalysis])
+  // 스크롤 기반 활성 섹션 감지
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
 
-  const handleLayerChange = useCallback((id) => {
-    setActiveLayer(id)
-    if (clickedPoint) runAnalysis(clickedPoint.lat, clickedPoint.lng, id, radius)
-  }, [clickedPoint, radius, runAnalysis])
+    let raf = 0
+    const onScroll = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        const sections = panel.querySelectorAll('[data-section]')
+        const panelRect = panel.getBoundingClientRect()
+        const triggerY = panelRect.top + panelRect.height * 0.35
 
-  const handleRadiusChange = useCallback((r) => {
-    setRadius(r)
-    if (clickedPoint) runAnalysis(clickedPoint.lat, clickedPoint.lng, activeLayer, r)
-  }, [clickedPoint, activeLayer, runAnalysis])
-
-  // GeoJSON 스타일 함수
-  const getOverlayStyle = useCallback((feature) => {
-    if (activeLayer === 'figground') {
-      return { color: 'rgba(255,255,255,0.25)', fillColor: 'rgba(226,232,240,0.18)', fillOpacity: 1, weight: 0.5 }
+        let active = null
+        for (const sec of sections) {
+          const rect = sec.getBoundingClientRect()
+          if (rect.top <= triggerY) {
+            active = sec.dataset.section
+          }
+        }
+        if (active && active !== 'pedshed') setVisibleSection(active)
+      })
     }
-    if (activeLayer === 'landuse') {
-      const c = getLandUseColor(feature.properties.landuse)
-      return { color: c, fillColor: c, fillOpacity: 0.35, weight: 0.5 }
-    }
-    if (activeLayer === 'intensity') {
-      const c = getHeightColor(feature.properties.levels)
-      return { color: c, fillColor: c, fillOpacity: 0.45, weight: 0.5 }
-    }
-    return {}
-  }, [activeLayer])
 
-  const overlayKey = `${activeLayer}-${clickedPoint?.lat}-${clickedPoint?.lng}-${radius}`
+    panel.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => { panel.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
+  }, [loading, clickedPoint])
+
+  const filtered = useMemo(() => {
+    if (!buildingData || !clickedPoint) return []
+    const center = turf.point([clickedPoint[1], clickedPoint[0]])
+    return buildingData.features.filter(f => {
+      const c = getCentroid(f)
+      if (!c) return false
+      return turf.distance(center, turf.point(c), { units: 'meters' }) <= radius
+    })
+  }, [buildingData, clickedPoint, radius])
+
+  // 반경 내 대중교통 필터링
+  const filteredTransit = useMemo(() => {
+    if (!transitData || !clickedPoint) return { busStops: [], subwayLines: {} }
+    const center = turf.point([clickedPoint[1], clickedPoint[0]])
+
+    const busStops = transitData.busStops.filter(s =>
+      turf.distance(center, turf.point([s.lng, s.lat]), { units: 'meters' }) <= radius
+    )
+
+    const subwayLines = {}
+    for (const [line, info] of Object.entries(transitData.subwayLines)) {
+      const stations = info.stations.filter(s =>
+        turf.distance(center, turf.point([s.lng, s.lat]), { units: 'meters' }) <= radius
+      )
+      if (stations.length > 0) {
+        subwayLines[line] = { color: info.color, stations }
+      }
+    }
+
+    return { busStops, subwayLines }
+  }, [transitData, clickedPoint, radius])
+
+  // 반경 내 상권 필터링
+  const filteredCommerce = useMemo(() => {
+    if (!commerceData || !clickedPoint) return []
+    const center = turf.point([clickedPoint[1], clickedPoint[0]])
+    return commerceData.areas.filter(a =>
+      turf.distance(center, turf.point([a.lng, a.lat]), { units: 'meters' }) <= radius
+    )
+  }, [commerceData, clickedPoint, radius])
+
+  // 반경 내 인구 점 필터링
+  const filteredDots = useMemo(() => {
+    if (!demoData || !clickedPoint) return []
+    const center = turf.point([clickedPoint[1], clickedPoint[0]])
+    return demoData.dots.filter(d =>
+      turf.distance(center, turf.point([d.lng, d.lat]), { units: 'meters' }) <= radius
+    )
+  }, [demoData, clickedPoint, radius])
+
+  // 반경 내 건물 PNU Set
+  const filteredSet = useMemo(() => {
+    return new Set(filtered.map(f => f.properties.pnu))
+  }, [filtered])
+
+  // 원 밖 건물 스타일
+  const OUTSIDE_STYLE = { fillColor: '#ddd', fillOpacity: 0.35, weight: 0.2, color: 'rgba(0,0,0,0.04)' }
+
+  // 지도 스타일 — visibleSection + 원 안/밖 구분
+  const buildingStyle = useCallback((feature) => {
+    const inside = !clickedPoint || filteredSet.has(feature.properties.pnu)
+
+    if (visibleSection === 'history') {
+      const year = getBuildYear(feature.properties)
+      if (!inside) return OUTSIDE_STYLE
+      if (year && year > ageFilterYear) return { fillColor: 'transparent', fillOpacity: 0, weight: 0, color: 'transparent' }
+      return { fillColor: getAgeColor(year), fillOpacity: 0.8, weight: 0.3, color: 'rgba(0,0,0,0.1)' }
+    }
+
+    if (!inside) return OUTSIDE_STYLE
+
+    if (visibleSection === 'figground') {
+      return { fillColor: '#111', fillOpacity: 0.9, weight: 0, color: 'transparent' }
+    }
+    if (visibleSection === 'landuse') {
+      return { fillColor: getPurpsColor(feature.properties.mainPurps), fillOpacity: 0.75, weight: 0.3, color: 'rgba(0,0,0,0.1)' }
+    }
+    if (visibleSection === 'intensity') {
+      return { fillColor: getVlRatColor(feature.properties.vlRat), fillOpacity: 0.75, weight: 0.3, color: 'rgba(0,0,0,0.08)' }
+    }
+    if (visibleSection === 'transit' || visibleSection === 'demo' || visibleSection === 'commerce') {
+      return { fillColor: '#e8e8e8', fillOpacity: 0.4, weight: 0.2, color: 'rgba(0,0,0,0.03)' }
+    }
+    return { fillColor: '#bbb', fillOpacity: 0.5, weight: 0.3, color: 'rgba(0,0,0,0.06)' }
+  }, [visibleSection, clickedPoint, filteredSet, ageFilterYear])
+
+  const onEachBuilding = useCallback((feature, layer) => {
+    layer.on({
+      mouseover: e => { e.target.setStyle({ weight: 1.5, color: '#333', fillOpacity: 0.95 }); e.target.bringToFront() },
+      mouseout: e => { if (geoRef.current) geoRef.current.resetStyle(e.target) },
+    })
+  }, [])
+
+  const tileUrl = visibleSection === 'figground'
+    ? 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
 
   return (
     <div className="gis-page">
       <Nav />
-
-      <div className="gis-container">
-
-        {/* ── 사이드 패널 ── */}
-        <aside className="gis-panel">
-
+      <div className="gis-layout">
+        {/* 사이드 패널 */}
+        <aside className="g-panel" ref={panelRef}>
           {/* 헤더 */}
-          <div className="panel-header">
-            <div className="panel-badge">Urban Analytics · Beta</div>
-            <div className="panel-title">서울 중구</div>
-            <div className="panel-subtitle">도시 환경 분석 플랫폼</div>
+          <div className="g-header">
+            <div className="g-header-badge">관설 Urban Analytics</div>
+            <h1 className="g-header-title">서울 중구</h1>
+            <p className="g-header-sub">도시 환경 분석 플랫폼</p>
           </div>
 
-          {/* 레이어 목록 */}
-          <div className="layer-list">
-            {LAYERS.map(l => (
-              <button
-                key={l.id}
-                className={`layer-item${activeLayer === l.id ? ' active' : ''}`}
-                style={{ '--accent': l.color }}
-                onClick={() => handleLayerChange(l.id)}
-              >
-                <span className="layer-num">{l.num}</span>
-                <div className="layer-info">
-                  <span className="layer-label">{l.label}</span>
-                  <span className="layer-sub">{l.sub}</span>
-                </div>
-                <div className="layer-dot" />
-              </button>
-            ))}
-          </div>
+          {loading && <div className="g-empty">데이터 로딩 중...</div>}
 
-          {/* 반경 선택 */}
-          <div className="radius-selector">
-            <span className="radius-label">분석 반경</span>
-            <div className="radius-options">
-              {RADIUS_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  className={`radius-btn${radius === opt.value ? ' active' : ''}`}
-                  style={radius === opt.value ? { '--accent': layerConfig.color } : {}}
-                  onClick={() => handleRadiusChange(opt.value)}
-                >
-                  <span>{opt.value}m</span>
-                  <span className="radius-walk">도보 {opt.label}</span>
-                </button>
-              ))}
+          {!loading && !clickedPoint && (
+            <div className="g-empty">
+              <div className="g-empty-icon">⊕</div>
+              <p>지도에서 분석할 위치를<br />클릭하세요</p>
             </div>
-          </div>
+          )}
 
-          {/* 분석 영역 */}
-          <div className="analysis-area">
-            {!clickedPoint && !isLoading && (
-              <div className="analysis-hint">
-                <span className="hint-icon">◎</span>
-                <p>지도에서 분석할 위치를<br />클릭하세요</p>
+          {!loading && clickedPoint && (
+            <div className="g-sections">
+
+              {/* ── Pedestrian Shed 제목 (스크롤됨) ── */}
+              <section data-section="pedshed" className="g-sec active g-sec-no-pad-bottom">
+                <div className="g-sec-header">
+                  <h2 className="g-sec-title">Pedestrian Shed</h2>
+                  <p className="g-sec-desc">보행권역 · Catchment Area</p>
+                </div>
+              </section>
+
+              {/* ── 슬라이더 + 통계 (sticky 고정) ── */}
+              <div className="g-sticky-controls">
+                <div className="g-slider-row">
+                  <span className="g-slider-value">{(radius / 1000).toFixed(2)} km</span>
+                  <input
+                    type="range"
+                    className="g-slider"
+                    min={100}
+                    max={1000}
+                    step={10}
+                    value={radius}
+                    onChange={e => setRadius(Number(e.target.value))}
+                  />
+                </div>
+                <div className="g-slider-labels">
+                  <span>0.10 km</span>
+                  <span>1.00 km</span>
+                </div>
+                <div className="g-stats-row">
+                  <Stat label="반경 내 건물" value={filtered.length} />
+                  <Stat label="도보 시간" value={`~${Math.round(radius / 80)}분`} />
+                </div>
               </div>
-            )}
 
-            {isLoading && (
-              <div className="analysis-loading">
-                <div className="loading-spinner" style={{ borderTopColor: layerConfig.color }} />
-                <p>분석 중...</p>
-              </div>
-            )}
+              <div className="g-section-divider" />
 
-            {!isLoading && analysisData && (
-              <AnalysisResult
-                layer={activeLayer}
-                data={analysisData}
-                color={layerConfig.color}
-                radius={radius}
-              />
-            )}
-          </div>
+              {/* ── 2. Development Intensity ── */}
+              <section data-section="intensity" className={visibleSection === 'intensity' ? 'g-sec active' : 'g-sec'}>
+                <div className="g-sec-header">
+                  <h2 className="g-sec-title">Development Intensity</h2>
+                  <p className="g-sec-desc">개발강도 · 용적률 활용 현황</p>
+                </div>
+                <IntensityContent buildings={filtered} />
+              </section>
+
+              <div className="g-section-divider" />
+
+              {/* ── 3. Figure Ground ── */}
+              <section data-section="figground" className={visibleSection === 'figground' ? 'g-sec active' : 'g-sec'}>
+                <div className="g-sec-header">
+                  <h2 className="g-sec-title">Figure Ground</h2>
+                  <p className="g-sec-desc">흑백도 · 건물과 공지의 비율</p>
+                </div>
+                <FigGroundContent buildings={filtered} />
+              </section>
+
+              <div className="g-section-divider" />
+
+              {/* ── 4. Land Use ── */}
+              <section data-section="landuse" className={visibleSection === 'landuse' ? 'g-sec active' : 'g-sec'}>
+                <div className="g-sec-header">
+                  <h2 className="g-sec-title">Land Use</h2>
+                  <p className="g-sec-desc">토지이용 · 용도 혼합도</p>
+                </div>
+                <LandUseContent buildings={filtered} />
+              </section>
+
+              <div className="g-section-divider" />
+
+              {/* ── 5. Building Age ── */}
+              <section data-section="history" className={visibleSection === 'history' ? 'g-sec active' : 'g-sec'}>
+                <div className="g-sec-header">
+                  <h2 className="g-sec-title">Building Age</h2>
+                  <p className="g-sec-desc">건물이력 · 건물 연령 분포</p>
+                </div>
+                <BuildingAgeContent
+                  buildings={filtered}
+                  ageFilterYear={ageFilterYear}
+                  onAgeFilterChange={setAgeFilterYear}
+                />
+              </section>
+
+              <div className="g-section-divider" />
+
+              {/* ── 6. Transit ── */}
+              <section data-section="transit" className={visibleSection === 'transit' ? 'g-sec active' : 'g-sec'}>
+                <div className="g-sec-header">
+                  <h2 className="g-sec-title">Transit Network</h2>
+                  <p className="g-sec-desc">대중교통 접근성 · 도보 가능 거리 내 대중교통 분석</p>
+                </div>
+                <TransitContent data={filteredTransit} />
+              </section>
+
+              <div className="g-section-divider" />
+
+              {/* ── 6. Demographics ── */}
+              <section data-section="demo" className={visibleSection === 'demo' ? 'g-sec active' : 'g-sec'}>
+                <div className="g-sec-header">
+                  <h2 className="g-sec-title">Demographics</h2>
+                  <p className="g-sec-desc">인구 데이터는 도시의 현재 상태를 이해하는 데 필수적입니다</p>
+                </div>
+                <DemographicsContent dots={filteredDots} demoData={demoData} radius={radius} />
+              </section>
+
+              <div className="g-section-divider" />
+
+              {/* ── 8. Commerce ── */}
+              <section data-section="commerce" className={visibleSection === 'commerce' ? 'g-sec active' : 'g-sec'}>
+                <div className="g-sec-header">
+                  <h2 className="g-sec-title">Commerce</h2>
+                  <p className="g-sec-desc">상권분석 · 반경 내 상권 현황</p>
+                </div>
+                <CommerceContent areas={filteredCommerce} commerceData={commerceData} />
+              </section>
+
+              <div style={{ height: '65vh' }} />
+            </div>
+          )}
         </aside>
 
-        {/* ── 지도 ── */}
-        <div className="gis-map">
+        {/* 지도 */}
+        <div className="g-map">
           <MapContainer
             center={CENTER}
             zoom={15}
-            minZoom={14}
+            minZoom={13}
             maxZoom={18}
-            maxBounds={JUNG_GU_BOUNDS}
+            maxBounds={BOUNDS}
             maxBoundsViscosity={1.0}
             zoomControl={false}
             style={{ width: '100%', height: '100%' }}
           >
             <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
+              key={tileUrl}
+              url={tileUrl}
+              attribution='&copy; OpenStreetMap &copy; CARTO'
               subdomains="abcd"
-              bounds={JUNG_GU_BOUNDS}
               maxZoom={18}
             />
             <ZoomControl position="bottomright" />
-            <MapClickHandler onMapClick={handleMapClick} />
+            <MapClick onClick={p => setClickedPoint(p)} />
 
-            {/* 도보권 버퍼 */}
-            {shedGeoJSON && (
+            {buildingData && (
               <GeoJSON
-                key={`shed-${overlayKey}`}
-                data={shedGeoJSON}
-                style={{
-                  color: layerConfig.color,
-                  fillColor: layerConfig.color,
-                  fillOpacity: 0.08,
-                  weight: 1.5,
-                  dashArray: '5 5',
-                }}
+                key={`${visibleSection}-${filteredSet.size}-${clickedPoint?.[0]}-${ageFilterYear}`}
+                ref={geoRef}
+                data={buildingData}
+                style={buildingStyle}
+                onEachFeature={onEachBuilding}
               />
             )}
 
-            {/* 레이어별 지도 오버레이 (건물·토지) */}
-            {mapOverlay && (
-              <GeoJSON
-                key={`overlay-${overlayKey}`}
-                data={mapOverlay}
-                style={getOverlayStyle}
-              />
-            )}
-
-            {/* 대중교통 노드 */}
-            {transitNodes.map((node, i) => {
-              const isSubway = node.tags?.railway === 'station' || node.tags?.railway === 'subway_entrance'
-              return (
-                <CircleMarker
-                  key={node.id || i}
-                  center={[node.lat, node.lon]}
-                  radius={isSubway ? 6 : 3}
-                  pathOptions={{
-                    color: isSubway ? '#818cf8' : '#a78bfa',
-                    fillColor: isSubway ? '#818cf8' : '#c4b5fd',
-                    fillOpacity: isSubway ? 0.9 : 0.7,
-                    weight: isSubway ? 2 : 1,
-                  }}
-                >
-                  <Popup>
-                    <span style={{ fontSize: 12 }}>
-                      {node.tags?.name || (isSubway ? '지하철역' : '버스 정류장')}
-                    </span>
-                  </Popup>
-                </CircleMarker>
-              )
-            })}
-
-            {/* 클릭 포인트 */}
             {clickedPoint && (
-              <CircleMarker
-                center={[clickedPoint.lat, clickedPoint.lng]}
-                radius={5}
-                pathOptions={{
-                  color: '#fff',
-                  fillColor: layerConfig.color,
-                  fillOpacity: 1,
-                  weight: 2,
-                }}
+              <DraggableCenter
+                position={clickedPoint}
+                radius={radius}
+                onMove={p => setClickedPoint(p)}
+              />
+            )}
+
+            {visibleSection === 'commerce' && commerceData && clickedPoint && (
+              <CommerceLayer commerceData={commerceData} filteredCommerce={filteredCommerce} />
+            )}
+
+            {visibleSection === 'demo' && demoData && clickedPoint && (
+              <DemoLayer dots={filteredDots} />
+            )}
+
+            {visibleSection === 'transit' && transitData && clickedPoint && (
+              <TransitLayer
+                transitData={transitData}
+                filteredTransit={filteredTransit}
+                clickedPoint={clickedPoint}
+                radius={radius}
               />
             )}
           </MapContainer>
-
-          {!clickedPoint && (
-            <div className="map-hint">지도를 클릭하면 분석이 시작됩니다</div>
-          )}
-
-          {clickedPoint && (
-            <div className="coords-display">
-              {clickedPoint.lat.toFixed(5)}°N &nbsp;{clickedPoint.lng.toFixed(5)}°E
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -519,273 +463,837 @@ export default function GisPage() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  분석 결과 컴포넌트
+//  드래그 가능한 분석 원
 // ═══════════════════════════════════════════════════════════════
-function AnalysisResult({ layer, data, color, radius }) {
-  if (data.error) return <div className="analysis-error">{data.error}</div>
-  switch (layer) {
-    case 'pedshed':   return <PedshedResult   data={data} color={color} radius={radius} />
-    case 'figground': return <FigGroundResult data={data} color={color} />
-    case 'landuse':   return <LandUseResult   data={data} color={color} />
-    case 'transit':   return <TransitResult   data={data} color={color} />
-    case 'demo':      return <DemoResult      data={data} color={color} />
-    case 'intensity': return <IntensityResult data={data} color={color} />
-    default:          return null
-  }
+function DraggableCenter({ position, radius, onMove }) {
+  const map = useMap()
+  const circleRef = useRef(null)
+  const overlayRef = useRef(null)
+  const draggingRef = useRef(false)
+  const offsetRef = useRef({ lat: 0, lng: 0 })
+
+  // position/radius 변경 시 업데이트
+  useEffect(() => {
+    if (circleRef.current) circleRef.current.setLatLng(position)
+    if (overlayRef.current) overlayRef.current.setLatLng(position)
+  }, [position])
+
+  useEffect(() => {
+    if (circleRef.current) circleRef.current.setRadius(radius)
+    if (overlayRef.current) overlayRef.current.setRadius(radius)
+  }, [radius])
+
+  useEffect(() => {
+    // 보이는 원 (점선 테두리)
+    const circle = L.circle(position, {
+      radius,
+      color: '#333',
+      weight: 1.5,
+      dashArray: '6 4',
+      fillColor: '#000',
+      fillOpacity: 0.04,
+      interactive: false,
+    }).addTo(map)
+    circleRef.current = circle
+
+    // 투명 드래그용 오버레이 (같은 크기, 이벤트 받음)
+    const overlay = L.circle(position, {
+      radius,
+      color: 'transparent',
+      fillColor: 'transparent',
+      fillOpacity: 0,
+      weight: 0,
+      interactive: true,
+      bubblingMouseEvents: false,
+      className: 'g-drag-overlay',
+    }).addTo(map)
+    overlayRef.current = overlay
+
+    const el = overlay.getElement?.()
+
+    overlay.on('mouseover', () => {
+      if (!draggingRef.current && el) el.style.cursor = 'grab'
+    })
+    overlay.on('mouseout', () => {
+      if (!draggingRef.current && el) el.style.cursor = ''
+    })
+
+    overlay.on('mousedown', (e) => {
+      L.DomEvent.stopPropagation(e)
+      draggingRef.current = true
+      if (el) el.style.cursor = 'grabbing'
+      map.dragging.disable()
+
+      const center = circle.getLatLng()
+      offsetRef.current = {
+        lat: center.lat - e.latlng.lat,
+        lng: center.lng - e.latlng.lng,
+      }
+
+      map.on('mousemove', onDrag)
+      map.once('mouseup', onDragEnd)
+    })
+
+    function onDrag(e) {
+      const newLat = e.latlng.lat + offsetRef.current.lat
+      const newLng = e.latlng.lng + offsetRef.current.lng
+      circle.setLatLng([newLat, newLng])
+      overlay.setLatLng([newLat, newLng])
+    }
+
+    function onDragEnd(e) {
+      map.off('mousemove', onDrag)
+      draggingRef.current = false
+      map.dragging.enable()
+      if (el) el.style.cursor = 'grab'
+
+      const center = circle.getLatLng()
+      onMove([center.lat, center.lng])
+    }
+
+    return () => {
+      map.off('mousemove', onDrag)
+      map.off('mouseup', onDragEnd)
+      map.removeLayer(circle)
+      map.removeLayer(overlay)
+    }
+  }, [map]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null
 }
 
-// ── 01 도보권 ──────────────────────────────────────────────────
-function PedshedResult({ data, color, radius }) {
-  const ha = (data.areaSqm / 10000).toFixed(1)
-  const walkMin = radius === 400 ? '5분' : '10분'
-  return (
-    <div className="result-card">
-      <div className="result-heading">도보권 분석</div>
-      <div className="result-metric">
-        <span className="metric-value" style={{ color }}>{ha}</span>
-        <span className="metric-unit">ha</span>
-        <div className="metric-label">도보 {walkMin} 권역 면적</div>
-      </div>
-      <div className="result-divider" />
-      <div className="result-rings">
-        {[radius * 0.25, radius * 0.5, radius * 0.75, radius].map((r, i) => (
-          <div key={r} className="ring-row">
-            <div className="ring-bar">
-              <div
-                className="ring-fill"
-                style={{ width: `${(i + 1) * 25}%`, background: color, opacity: 0.3 + i * 0.2 }}
-              />
-            </div>
-            <span className="ring-label">{Math.round(r)}m</span>
-          </div>
-        ))}
-      </div>
-      <div className="result-note">도보 속도 80m/분 기준 · 직선거리 근사</div>
-    </div>
-  )
-}
+// ═══════════════════════════════════════════════════════════════
+//  개발강도
+// ═══════════════════════════════════════════════════════════════
+function IntensityContent({ buildings }) {
+  const withVl = buildings.filter(b => b.properties.vlRat > 0)
+  const avg = withVl.length ? Math.round(withVl.reduce((s, b) => s + b.properties.vlRat, 0) / withVl.length) : 0
 
-// ── 02 피겨그라운드 ────────────────────────────────────────────
-function FigGroundResult({ data, color }) {
-  const solidPct = (data.solidRatio * 100).toFixed(1)
-  const voidPct  = (data.voidRatio  * 100).toFixed(1)
-  const pieData  = [
-    { name: '건물 (Solid)', value: +solidPct },
-    { name: '공지 (Void)',  value: +voidPct  },
+  const buckets = [
+    { range: '0–100', min: 0, max: 100, color: '#2166ac' },
+    { range: '100–200', min: 100, max: 200, color: '#67a9cf' },
+    { range: '200–300', min: 200, max: 300, color: '#a8d4e6' },
+    { range: '300–500', min: 300, max: 500, color: '#ef8a62' },
+    { range: '500+', min: 500, max: Infinity, color: '#b2182b' },
   ]
-  return (
-    <div className="result-card">
-      <div className="result-heading">피겨그라운드</div>
-      <div className="result-metric">
-        <span className="metric-value" style={{ color }}>{data.count}</span>
-        <span className="metric-unit">동</span>
-        <div className="metric-label">반경 내 건물 수</div>
-      </div>
-      <div className="result-divider" />
-      <div className="solid-void">
-        <div className="sv-bar">
-          <div className="sv-solid" style={{ width: `${solidPct}%`, background: color }} />
-        </div>
-        <div className="sv-labels">
-          <span style={{ color }}>Solid {solidPct}%</span>
-          <span className="sv-void-label">Void {voidPct}%</span>
-        </div>
-      </div>
-      <div className="chart-wrap">
-        <ResponsiveContainer width="100%" height={130}>
-          <PieChart>
-            <Pie
-              data={pieData}
-              cx="50%" cy="50%"
-              innerRadius={35} outerRadius={55}
-              dataKey="value"
-              paddingAngle={2}
-            >
-              <Cell fill={color} />
-              <Cell fill="rgba(255,255,255,0.08)" />
-            </Pie>
-            <Tooltip content={<ChartTooltip />} />
-            <Legend
-              iconSize={8}
-              formatter={(v) => <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>{v}</span>}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="result-note">OSM 건물 데이터 기준</div>
-    </div>
-  )
-}
+  const hist = buckets.map(b => ({
+    name: b.range,
+    value: withVl.filter(f => {
+      const v = f.properties.vlRat
+      return b.min === 0 ? (v > 0 && v <= b.max) : (v > b.min && (b.max === Infinity || v <= b.max))
+    }).length,
+    color: b.color,
+  }))
 
-// ── 03 토지이용 ────────────────────────────────────────────────
-function LandUseResult({ data, color }) {
-  if (!data.total) return (
-    <div className="result-card">
-      <div className="result-heading">토지 이용</div>
-      <div className="result-empty">해당 반경 내 데이터 없음</div>
-    </div>
-  )
+  const under = withVl.filter(b => b.properties.vlRat <= 100).length
+  const normal = withVl.filter(b => b.properties.vlRat > 100 && b.properties.vlRat <= 500).length
+  const over = withVl.filter(b => b.properties.vlRat > 500).length
+  const pieData = [
+    { name: '저활용 ≤100%', value: under, color: '#2166ac' },
+    { name: '적정 100–500%', value: normal, color: '#67a9cf' },
+    { name: '과밀 500%+', value: over, color: '#b2182b' },
+  ].filter(d => d.value > 0)
+
   return (
-    <div className="result-card">
-      <div className="result-heading">토지 이용</div>
-      <div className="result-metric">
-        <span className="metric-value" style={{ color }}>{data.entropyScore}</span>
-        <span className="metric-unit">/ 1.0</span>
-        <div className="metric-label">토지 이용 다양성 (엔트로피)</div>
+    <>
+      <div className="g-stats-row">
+        <Stat label="건물 수" value={buildings.length} />
+        <Stat label="용적률 보유" value={withVl.length} />
+        <Stat label="평균 용적률" value={`${avg}%`} />
       </div>
-      <div className="result-divider" />
-      <div className="chart-wrap">
-        <ResponsiveContainer width="100%" height={Math.max(100, data.breakdown.length * 26)}>
-          <BarChart
-            data={data.breakdown.slice(0, 7)}
-            layout="vertical"
-            margin={{ top: 0, right: 24, left: 44, bottom: 0 }}
-          >
-            <XAxis type="number" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis type="category" dataKey="name" tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 11 }} axisLine={false} tickLine={false} width={44} />
-            <Tooltip content={<ChartTooltip />} />
-            <Bar dataKey="value" radius={[0, 3, 3, 0]}>
-              {data.breakdown.slice(0, 7).map((d, i) => (
-                <Cell key={i} fill={getLandUseColor(d.type)} />
-              ))}
+
+      <div className="g-sub-title">용적률 분포</div>
+      <div className="g-chart">
+        <ResponsiveContainer width="100%" height={150}>
+          <BarChart data={hist} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#999' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#bbb' }} axisLine={false} tickLine={false} />
+            <Tooltip content={<ChartTip />} />
+            <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+              {hist.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="result-note">총 {data.total}개 구역 · OSM 데이터</div>
-    </div>
-  )
-}
 
-// ── 04 대중교통 ────────────────────────────────────────────────
-function TransitResult({ data, color }) {
-  const chartData = [
-    { name: '지하철', value: data.subway?.length || 0 },
-    { name: '버스',   value: data.bus?.length    || 0 },
-  ]
-  const scoreRaw = Math.min(100, (data.subway?.length || 0) * 25 + (data.bus?.length || 0) * 3)
-  const stations = data.subway
-    ?.filter(n => n.tags?.railway === 'station')
-    .filter((n, i, arr) => arr.findIndex(x => x.tags?.name === n.tags?.name) === i)
-    .slice(0, 5) || []
-
-  return (
-    <div className="result-card">
-      <div className="result-heading">대중교통</div>
-      <div className="result-metric">
-        <span className="metric-value" style={{ color }}>{data.total || 0}</span>
-        <span className="metric-unit">개소</span>
-        <div className="metric-label">반경 내 교통시설</div>
-      </div>
-      <div className="chart-wrap">
-        <ResponsiveContainer width="100%" height={90}>
-          <BarChart data={chartData} margin={{ top: 0, right: 8, left: -24, bottom: 0 }}>
-            <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip content={<ChartTooltip />} />
-            <Bar dataKey="value" fill={color} radius={[3, 3, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      {stations.length > 0 && (
+      {pieData.length > 0 && (
         <>
-          <div className="result-divider" />
-          <div className="transit-list">
-            {stations.map((s, i) => (
-              <div key={i} className="transit-item">
-                <div className="transit-dot" style={{ background: color }} />
-                <span className="transit-name">{s.tags?.name || '지하철역'}</span>
-                <span className="transit-type">지하철</span>
-              </div>
-            ))}
+          <div className="g-sub-title">활용 구분</div>
+          <div className="g-chart">
+            <ResponsiveContainer width="100%" height={170}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={62} dataKey="value" paddingAngle={2}>
+                  {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
+                </Pie>
+                <Tooltip content={<ChartTip />} />
+                <Legend iconSize={8} formatter={v => <span style={{ fontSize: 11, color: '#666' }}>{v}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </>
       )}
-      <div className="result-divider" />
-      <div className="score-section">
-        <div className="score-label">교통 접근성 점수</div>
-        <div className="score-bar">
-          <div className="score-fill" style={{ width: `${scoreRaw}%`, background: color }} />
-        </div>
-      </div>
-    </div>
+    </>
   )
 }
 
-// ── 05 인구통계 ────────────────────────────────────────────────
-function DemoResult({ data, color }) {
+// ═══════════════════════════════════════════════════════════════
+//  흑백도
+// ═══════════════════════════════════════════════════════════════
+function FigGroundContent({ buildings }) {
+  let solidArea = 0
+  const totalPlat = buildings.reduce((s, b) => s + (b.properties.platArea || 0), 0)
+  for (const b of buildings) {
+    const floors = b.properties.grndFlrCnt || 1
+    solidArea += (b.properties.totArea || 0) / Math.max(floors, 1)
+  }
+  const solidRatio = totalPlat > 0 ? Math.min(1, solidArea / totalPlat) : 0
+  const voidRatio = 1 - solidRatio
+
+  const pieData = [
+    { name: 'Solid (건물)', value: +(solidRatio * 100).toFixed(1), color: '#111' },
+    { name: 'Void (공지)', value: +(voidRatio * 100).toFixed(1), color: '#e0e0e0' },
+  ]
+
   return (
-    <div className="result-card">
-      <div className="result-heading">인구통계 <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'rgba(255,255,255,0.2)' }}>서울 중구 기준</span></div>
-      <div className="result-metric">
-        <span className="metric-value" style={{ color }}>{data.estimatedPop.toLocaleString()}</span>
-        <span className="metric-unit">명</span>
-        <div className="metric-label">반경 내 추정 인구</div>
+    <>
+      <div className="g-stats-row">
+        <Stat label="건물 수" value={buildings.length} />
+        <Stat label="Footprints Area" value={`${Math.round(solidArea).toLocaleString()}㎡`} />
       </div>
-      <div className="demo-row">
-        <div className="demo-stat">
-          <div className="demo-value">{data.density.toLocaleString()}</div>
-          <div className="demo-label">인구밀도 (명/km²)</div>
-        </div>
-        <div className="demo-stat">
-          <div className="demo-value">{data.foreignerRatio}%</div>
-          <div className="demo-label">외국인 비율</div>
-        </div>
+
+      <div className="g-sub-title">Solid / Void Ratio</div>
+      <div className="g-sv-bar">
+        <div className="g-sv-fill" style={{ width: `${solidRatio * 100}%` }} />
       </div>
-      <div className="result-divider" />
-      <div className="result-sub-heading">연령 분포</div>
-      <div className="chart-wrap">
-        <ResponsiveContainer width="100%" height={120}>
-          <BarChart
-            data={data.ageGroups}
-            margin={{ top: 0, right: 8, left: -28, bottom: 0 }}
-          >
-            <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 9 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} axisLine={false} tickLine={false} unit="%" />
-            <Tooltip content={<ChartTooltip />} />
-            <Bar dataKey="value" fill={color} radius={[2, 2, 0, 0]} />
-          </BarChart>
+      <div className="g-sv-labels">
+        <span>Solid {(solidRatio * 100).toFixed(1)}%</span>
+        <span>Void {(voidRatio * 100).toFixed(1)}%</span>
+      </div>
+
+      <div className="g-chart" style={{ marginTop: 12 }}>
+        <ResponsiveContainer width="100%" height={170}>
+          <PieChart>
+            <Pie data={pieData} cx="50%" cy="50%" innerRadius={38} outerRadius={62} dataKey="value" paddingAngle={2}>
+              {pieData.map((d, i) => <Cell key={i} fill={d.color} />)}
+            </Pie>
+            <Legend iconSize={8} formatter={v => <span style={{ fontSize: 11, color: '#666' }}>{v}</span>} />
+          </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="result-note">2023 서울특별시 통계 · 반경 내 추정치</div>
-    </div>
+    </>
   )
 }
 
-// ── 06 개발강도 ────────────────────────────────────────────────
-function IntensityResult({ data, color }) {
-  const highPct = data.total ? (data.highRiseRatio * 100).toFixed(0) : 0
+// ═══════════════════════════════════════════════════════════════
+//  토지이용
+// ═══════════════════════════════════════════════════════════════
+function LandUseContent({ buildings }) {
+  const counts = {}
+  for (const b of buildings) {
+    const p = b.properties.mainPurps || '기타'
+    counts[p] = (counts[p] || 0) + 1
+  }
+  const sorted = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, value]) => ({ name, value, color: getPurpsColor(name) }))
+  const entropyScore = calcEntropy(counts)
+  const maxCount = sorted.length ? sorted[0].value : 1
+
   return (
-    <div className="result-card">
-      <div className="result-heading">개발강도</div>
-      <div className="result-metric">
-        <span className="metric-value" style={{ color }}>{data.total}</span>
-        <span className="metric-unit">동</span>
-        <div className="metric-label">반경 내 건물 수</div>
+    <>
+      <div className="g-stats-row">
+        <Stat label="건물 수" value={buildings.length} />
+        <Stat label="용도 수" value={sorted.length} />
+        <Stat label="Entropy" value={entropyScore} />
       </div>
-      <div className="result-divider" />
-      <div className="chart-wrap">
-        <ResponsiveContainer width="100%" height={110}>
-          <BarChart data={data.breakdown} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
-            <XAxis dataKey="name" tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 10 }} axisLine={false} tickLine={false} />
-            <Tooltip content={<ChartTooltip />} />
+
+      <div className="g-sub-title">용도별 분포</div>
+      <div className="g-bar-list">
+        {sorted.slice(0, 10).map(d => (
+          <div key={d.name} className="g-bar-item">
+            <div className="g-bar-header">
+              <span className="g-bar-dot" style={{ background: d.color }} />
+              <span className="g-bar-name">{d.name}</span>
+              <span className="g-bar-count">{d.value}</span>
+            </div>
+            <div className="g-bar-track">
+              <div className="g-bar-fill" style={{ width: `${(d.value / maxCount) * 100}%`, background: d.color }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="g-entropy-box">
+        <span className="g-entropy-label">Entropy Score</span>
+        <span className="g-entropy-value">{entropyScore}</span>
+        <span className="g-entropy-max">/ 1.0</span>
+      </div>
+      <p className="g-entropy-note">1에 가까울수록 용도가 다양합니다</p>
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  대중교통 지도 레이어
+// ═══════════════════════════════════════════════════════════════
+function TransitLayer({ transitData, filteredTransit, clickedPoint, radius }) {
+  const map = useMap()
+  const layerGroupRef = useRef(null)
+
+  useEffect(() => {
+    if (layerGroupRef.current) {
+      map.removeLayer(layerGroupRef.current)
+    }
+    const group = L.layerGroup().addTo(map)
+    layerGroupRef.current = group
+
+    const center = clickedPoint ? turf.point([clickedPoint[1], clickedPoint[0]]) : null
+    const insideBusSet = new Set(filteredTransit.busStops.map(s => `${s.lat}-${s.lng}`))
+    const insideStationSet = new Set()
+    for (const info of Object.values(filteredTransit.subwayLines)) {
+      for (const s of info.stations) insideStationSet.add(s.name)
+    }
+
+    // 지하철 노선 (전체 그리되 반경 밖은 흐리게)
+    for (const [line, info] of Object.entries(transitData.subwayLines)) {
+      const allStations = info.stations
+      if (allStations.length < 2) continue
+
+      const coords = allStations.map(s => [s.lat, s.lng])
+      // 전체 노선 선 (흐리게)
+      L.polyline(coords, {
+        color: info.color,
+        weight: 5,
+        opacity: 0.12,
+        interactive: false,
+      }).addTo(group)
+
+      // 반경 내 구간 강조
+      const insideCoords = allStations
+        .filter(s => insideStationSet.has(s.name))
+        .map(s => [s.lat, s.lng])
+      if (insideCoords.length >= 2) {
+        L.polyline(insideCoords, {
+          color: info.color,
+          weight: 5,
+          opacity: 0.9,
+          interactive: false,
+        }).addTo(group)
+      }
+
+      // 역 마커 + 라벨
+      for (const s of allStations) {
+        const inside = insideStationSet.has(s.name)
+        L.circleMarker([s.lat, s.lng], {
+          radius: inside ? 7 : 4,
+          fillColor: info.color,
+          fillOpacity: inside ? 0.9 : 0.15,
+          color: '#fff',
+          weight: inside ? 2 : 1,
+          opacity: inside ? 1 : 0.15,
+        }).addTo(group)
+
+        if (inside) {
+          L.marker([s.lat, s.lng], {
+            icon: L.divIcon({
+              className: 'g-station-label',
+              html: `<span>${s.name}</span>`,
+              iconSize: [0, 0],
+              iconAnchor: [0, -12],
+            }),
+            interactive: false,
+          }).addTo(group)
+        }
+      }
+    }
+
+    // 버스 정류장 (divIcon으로 줌 레벨 무관 고정 크기)
+    for (const s of transitData.busStops) {
+      const inside = insideBusSet.has(`${s.lat}-${s.lng}`)
+      L.marker([s.lat, s.lng], {
+        icon: L.divIcon({
+          className: inside ? 'g-bus-dot inside' : 'g-bus-dot outside',
+          iconSize: [10, 10],
+          iconAnchor: [5, 5],
+        }),
+        interactive: false,
+      }).addTo(group)
+    }
+
+    return () => { map.removeLayer(group) }
+  }, [map, transitData, filteredTransit, clickedPoint, radius])
+
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  대중교통 사이드 패널
+// ═══════════════════════════════════════════════════════════════
+function TransitContent({ data }) {
+  const { busStops, subwayLines } = data
+  const subwayEntries = Object.entries(subwayLines)
+  // 환승역 중복 제거한 고유 역 수
+  const uniqueStationNames = new Set()
+  subwayEntries.forEach(([, info]) => info.stations.forEach(s => uniqueStationNames.add(s.name)))
+  const totalStations = uniqueStationNames.size
+
+  return (
+    <>
+      {/* Bus */}
+      <div className="g-transit-group">
+        <div className="g-transit-header">
+          <span className="g-transit-icon" style={{ background: '#3366cc' }} />
+          <span className="g-transit-group-title">Bus Network</span>
+        </div>
+        <div className="g-stats-row">
+          <Stat label="Stops" value={busStops.length} />
+        </div>
+      </div>
+
+      <div className="g-divider-thin" />
+
+      {/* Subway */}
+      <div className="g-transit-group">
+        <div className="g-transit-header">
+          <span className="g-transit-icon" style={{ background: '#f59e0b' }} />
+          <span className="g-transit-group-title">Subway Network</span>
+        </div>
+        <div className="g-stats-row">
+          <Stat label="Lines" value={subwayEntries.length} />
+          <Stat label="Stations" value={totalStations} />
+        </div>
+
+        {subwayEntries.length > 0 && (
+          <div className="g-transit-lines">
+            {subwayEntries.map(([line, info]) => (
+              <div key={line} className="g-transit-line">
+                <span className="g-transit-line-badge" style={{ background: info.color }}>
+                  {line.replace('0', '').replace('호선', '')}
+                </span>
+                <div className="g-transit-stations">
+                  {info.stations.map(s => (
+                    <span key={s.code} className="g-transit-station-tag">{s.name}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {subwayEntries.length === 0 && (
+          <p className="g-age-note" style={{ marginTop: 8 }}>반경 내 지하철역이 없습니다</p>
+        )}
+      </div>
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  인구 Dot Density 지도 레이어
+// ═══════════════════════════════════════════════════════════════
+const AGE_DOT_COLORS = {
+  'age_0_19': '#3366cc',
+  'age_20_39': '#2ecc71',
+  'age_40_59': '#f39c12',
+  'age_60_plus': '#e74c3c',
+}
+
+function DemoLayer({ dots }) {
+  const map = useMap()
+  const layerRef = useRef(null)
+
+  useEffect(() => {
+    if (layerRef.current) map.removeLayer(layerRef.current)
+
+    const canvas = L.canvas({ padding: 0.5 })
+    const group = L.layerGroup()
+
+    for (const d of dots) {
+      L.circleMarker([d.lat, d.lng], {
+        radius: 2.5,
+        fillColor: AGE_DOT_COLORS[d.g] || '#999',
+        fillOpacity: 0.7,
+        weight: 0,
+        renderer: canvas,
+        interactive: false,
+      }).addTo(group)
+    }
+
+    group.addTo(map)
+    layerRef.current = group
+
+    return () => { map.removeLayer(group) }
+  }, [map, dots])
+
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  인구 사이드 패널
+// ═══════════════════════════════════════════════════════════════
+const AGE_LABELS = {
+  'age_0_19': '19세 이하',
+  'age_20_39': '20~39세',
+  'age_40_59': '40~59세',
+  'age_60_plus': '60세 이상',
+}
+
+function DemographicsContent({ dots, demoData, radius }) {
+  if (!demoData) return <div className="g-coming-soon">데이터 로딩 중...</div>
+
+  const dotPer = demoData.dotPer || 10
+  const totalPop = dots.length * dotPer
+  const areaSqKm = Math.PI * (radius / 1000) ** 2
+  const density = areaSqKm > 0 ? Math.round(totalPop / areaSqKm) : 0
+
+  // 연령대별 집계
+  const ageCounts = { age_0_19: 0, age_20_39: 0, age_40_59: 0, age_60_plus: 0 }
+  for (const d of dots) ageCounts[d.g] = (ageCounts[d.g] || 0) + 1
+  const totalDots = dots.length || 1
+
+  const ageData = Object.entries(ageCounts).map(([key, count]) => ({
+    key,
+    label: AGE_LABELS[key],
+    color: AGE_DOT_COLORS[key],
+    count: count * dotPer,
+    pct: ((count / totalDots) * 100).toFixed(1),
+  }))
+
+  // 연령 다양성 (Shannon Entropy)
+  const entropyVal = calcEntropy(ageCounts)
+
+  // 시간대별 차트
+  const hourlyChart = demoData.hourlyChart || []
+
+  return (
+    <>
+      <div className="g-sub-title">Population Density</div>
+      <div className="g-stats-row">
+        <Stat label="People" value={Math.round(totalPop).toLocaleString()} />
+        <Stat label="People / km²" value={density.toLocaleString()} />
+      </div>
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">Age Distribution</div>
+      <div className="g-bar-list">
+        {ageData.map(d => (
+          <div key={d.key} className="g-bar-item">
+            <div className="g-bar-header">
+              <span className="g-bar-dot" style={{ background: d.color }} />
+              <span className="g-bar-name">{d.label}</span>
+              <span className="g-bar-count">{d.pct}%</span>
+            </div>
+            <div className="g-bar-track">
+              <div className="g-bar-fill" style={{ width: `${d.pct}%`, background: d.color }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">시간대별 유동인구</div>
+      {hourlyChart.length > 0 ? (
+        <div className="g-chart">
+          <ResponsiveContainer width="100%" height={140}>
+            <BarChart data={hourlyChart} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <XAxis
+                dataKey="hour"
+                tick={{ fontSize: 9, fill: '#aaa' }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={h => h % 3 === 0 ? `${h}시` : ''}
+              />
+              <YAxis tick={{ fontSize: 9, fill: '#bbb' }} axisLine={false} tickLine={false} />
+              <Tooltip content={<ChartTip />} />
+              <Bar dataKey="pop" fill="#3366cc" radius={[2, 2, 0, 0]} opacity={0.7} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="g-coming-soon">데이터 준비 중</div>
+      )}
+
+      <div className="g-divider-thin" />
+
+      <div className="g-entropy-box">
+        <span className="g-entropy-label">Age Diversity</span>
+        <span className="g-entropy-value">{entropyVal}</span>
+        <span className="g-entropy-max">/ 1.0</span>
+      </div>
+      <p className="g-entropy-note">연령대 분포의 다양성 지수 (Shannon Entropy)</p>
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">범례</div>
+      <div className="g-age-legend">
+        {ageData.map(d => (
+          <div key={d.key} className="g-age-legend-item">
+            <div className="g-age-legend-color" style={{ background: d.color }} />
+            <span>{d.label}</span>
+          </div>
+        ))}
+      </div>
+      <p className="g-age-note" style={{ marginTop: 8 }}>1점 = {dotPer}명 · 오후 2시 기준 생활인구</p>
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  상권 지도 레이어
+// ═══════════════════════════════════════════════════════════════
+const COMMERCE_COLORS = {
+  '골목상권': '#3366cc',
+  '발달상권': '#e74c3c',
+  '전통시장': '#2ecc71',
+  '관광특구': '#f39c12',
+}
+
+function CommerceLayer({ commerceData, filteredCommerce }) {
+  const map = useMap()
+  const layerRef = useRef(null)
+
+  useEffect(() => {
+    if (layerRef.current) map.removeLayer(layerRef.current)
+    const group = L.layerGroup().addTo(map)
+    layerRef.current = group
+
+    const insideSet = new Set(filteredCommerce.map(a => a.code))
+
+    for (const a of commerceData.areas) {
+      const inside = insideSet.has(a.code)
+      const color = COMMERCE_COLORS[a.type] || '#999'
+
+      L.circle([a.lat, a.lng], {
+        radius: a.radius || 50,
+        color: color,
+        weight: inside ? 2 : 1,
+        dashArray: inside ? null : '4 4',
+        opacity: inside ? 0.8 : 0.2,
+        fillColor: color,
+        fillOpacity: inside ? 0.15 : 0,
+        interactive: inside,
+      }).addTo(group)
+
+      if (inside) {
+        L.marker([a.lat, a.lng], {
+          icon: L.divIcon({
+            className: 'g-commerce-label',
+            html: `<span>${a.name}</span>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, 8],
+          }),
+          interactive: false,
+        }).addTo(group)
+      }
+    }
+
+    return () => { map.removeLayer(group) }
+  }, [map, commerceData, filteredCommerce])
+
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  상권 사이드 패널
+// ═══════════════════════════════════════════════════════════════
+function CommerceContent({ areas, commerceData }) {
+  if (!commerceData) return <div className="g-coming-soon">데이터 로딩 중...</div>
+
+  const totalStores = areas.reduce((s, a) => s + a.stores, 0)
+  const totalOpen = areas.reduce((s, a) => s + a.openStores, 0)
+  const totalClose = areas.reduce((s, a) => s + a.closeStores, 0)
+  const totalSales = areas.reduce((s, a) => s + a.salesTotal, 0)
+  const closeRate = totalStores > 0 ? ((totalClose / totalStores) * 100).toFixed(1) : 0
+
+  // 상권 유형별 카운트
+  const typeCounts = {}
+  for (const a of areas) {
+    typeCounts[a.type] = (typeCounts[a.type] || 0) + 1
+  }
+
+  // 업종별 점포 수 집계
+  const catCounts = {}
+  for (const a of areas) {
+    for (const [cat, count] of a.topCategories) {
+      catCounts[cat] = (catCounts[cat] || 0) + count
+    }
+  }
+  const sortedCats = Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 10)
+  const maxCat = sortedCats.length ? sortedCats[0][1] : 1
+
+  return (
+    <>
+      <div className="g-stats-row">
+        <Stat label="상권 수" value={areas.length} />
+        <Stat label="총 점포" value={totalStores.toLocaleString()} />
+      </div>
+
+      {/* 상권 유형 태그 */}
+      <div className="g-commerce-tags">
+        {Object.entries(typeCounts).map(([type, count]) => (
+          <span key={type} className="g-commerce-tag" style={{ borderColor: COMMERCE_COLORS[type] || '#999', color: COMMERCE_COLORS[type] || '#999' }}>
+            {type} {count}
+          </span>
+        ))}
+      </div>
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">업종 분포</div>
+      <div className="g-bar-list">
+        {sortedCats.map(([name, value]) => (
+          <div key={name} className="g-bar-item">
+            <div className="g-bar-header">
+              <span className="g-bar-name">{name}</span>
+              <span className="g-bar-count">{value}</span>
+            </div>
+            <div className="g-bar-track">
+              <div className="g-bar-fill" style={{ width: `${(value / maxCat) * 100}%`, background: '#666' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">개업 / 폐업</div>
+      <div className="g-stats-row">
+        <Stat label="개업" value={totalOpen} />
+        <Stat label="폐업" value={totalClose} />
+        <Stat label="폐업률" value={`${closeRate}%`} />
+      </div>
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">추정 매출 ({commerceData.quarter.slice(0,4)}년 {commerceData.quarter.slice(4)}분기)</div>
+      <div className="g-stats-row">
+        <Stat label="총 매출" value={totalSales > 0 ? `${(totalSales / 100000000).toFixed(1)}억` : '—'} />
+        <Stat label="상권 수" value={areas.filter(a => a.salesTotal > 0).length} />
+      </div>
+
+      {areas.filter(a => a.salesTotal > 0).length > 0 && (
+        <div className="g-commerce-sales-list">
+          {[...areas].filter(a => a.salesTotal > 0).sort((a, b) => b.salesTotal - a.salesTotal).map(a => (
+            <div key={a.code} className="g-commerce-sales-item">
+              <div className="g-commerce-sales-header">
+                <span className="g-commerce-sales-dot" style={{ background: COMMERCE_COLORS[a.type] || '#999' }} />
+                <span className="g-commerce-sales-name">{a.name}</span>
+              </div>
+              <div className="g-commerce-sales-row">
+                <span className="g-commerce-sales-value">{(a.salesTotal / 100000000).toFixed(1)}억</span>
+                <span className="g-commerce-sales-meta">{a.stores}개 점포 · {a.type}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">범례</div>
+      <div className="g-age-legend">
+        {Object.entries(COMMERCE_COLORS).map(([type, color]) => (
+          <div key={type} className="g-age-legend-item">
+            <div className="g-age-legend-color" style={{ background: color }} />
+            <span>{type}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  건물이력
+// ═══════════════════════════════════════════════════════════════
+function BuildingAgeContent({ buildings, ageFilterYear, onAgeFilterChange }) {
+  const currentYear = 2026
+
+  const withYear = buildings.filter(b => getBuildYear(b.properties) > 0)
+  const years = withYear.map(b => getBuildYear(b.properties))
+  const avgAge = years.length ? Math.round(years.reduce((s, y) => s + (currentYear - y), 0) / years.length) : 0
+  const maxAge = years.length ? currentYear - Math.min(...years) : 0
+
+  const hist = AGE_BUCKETS.map(bucket => ({
+    name: bucket.label,
+    value: withYear.filter(b => {
+      const y = getBuildYear(b.properties)
+      return y >= bucket.min && y <= bucket.max
+    }).length,
+    color: bucket.color,
+  }))
+
+  return (
+    <>
+      <div className="g-stats-row">
+        <Stat label="건물 수" value={buildings.length} />
+        <Stat label="연도 보유" value={withYear.length} />
+        <Stat label="평균 연령" value={`${avgAge}년`} />
+        <Stat label="최고 연령" value={`${maxAge}년`} />
+      </div>
+
+      <div className="g-sub-title">연대별 분포</div>
+      <div className="g-chart">
+        <ResponsiveContainer width="100%" height={160}>
+          <BarChart data={hist} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+            <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#999' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 10, fill: '#bbb' }} axisLine={false} tickLine={false} />
+            <Tooltip content={<ChartTip />} />
             <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-              {data.breakdown.map((_, i) => (
-                <Cell key={i} fill={['#fde68a','#fb923c','#f97316','#dc2626'][i]} />
-              ))}
+              {hist.map((d, i) => <Cell key={i} fill={d.color} />)}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="result-divider" />
-      <div className="score-section">
-        <div className="score-label">고층 비율 (6층+) · {highPct}%</div>
-        <div className="score-bar">
-          <div className="score-fill" style={{ width: `${highPct}%`, background: color }} />
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">시간 슬라이더</div>
+      <div className="g-slider-row">
+        <span className="g-slider-value">~{ageFilterYear}년</span>
+        <input
+          type="range"
+          className="g-slider"
+          min={1950}
+          max={2025}
+          step={1}
+          value={ageFilterYear}
+          onChange={e => onAgeFilterChange(Number(e.target.value))}
+        />
+      </div>
+      <div className="g-slider-labels">
+        <span>1950</span>
+        <span>2025</span>
+      </div>
+      <p className="g-age-note">{ageFilterYear}년 이전에 지어진 건물만 표시됩니다</p>
+
+      <div className="g-divider-thin" />
+
+      <div className="g-sub-title">범례</div>
+      <div className="g-age-legend">
+        {AGE_BUCKETS.map(b => (
+          <div key={b.label} className="g-age-legend-item">
+            <div className="g-age-legend-color" style={{ background: b.color }} />
+            <span>{b.label}</span>
+          </div>
+        ))}
+        <div className="g-age-legend-item">
+          <div className="g-age-legend-color" style={{ background: '#ccc' }} />
+          <span>데이터 없음</span>
         </div>
       </div>
-      <div className="result-note">OSM building:levels 태그 기준</div>
+    </>
+  )
+}
+
+// ─── 공통 ───────────────────────────────────────────────────────
+function Stat({ label, value }) {
+  return (
+    <div className="g-stat">
+      <div className="g-stat-value">{typeof value === 'number' ? value.toLocaleString() : value}</div>
+      <div className="g-stat-label">{label}</div>
     </div>
   )
 }
