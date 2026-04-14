@@ -434,11 +434,13 @@ export default function GisPage() {
       click: async () => {
         setSelectedBuilding(feature)
         setMobileSheet(1)
-        await copyAddress(feature.properties.address || '')
-        showToast('📋 주소가 복사되었습니다')
+        if (!circleEnabled) {
+          await copyAddress(feature.properties.address || '')
+          showToast('📋 주소가 복사되었습니다')
+        }
       },
     })
-  }, [copyAddress, showToast])
+  }, [copyAddress, showToast, circleEnabled])
 
   const tileUrl = visibleSection === 'figground'
     ? 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
