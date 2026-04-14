@@ -190,6 +190,8 @@ export default function GisPage() {
   const [demoAgeFilter, setDemoAgeFilter] = useState(null) // null=전체, 'age_0_19' 등
   const [missingFilter, setMissingFilter] = useState(null) // null=용적률색상, 'vlRat','grndFlrCnt','platArea','totArea'
   const [showSurveyArea, setShowSurveyArea] = useState(false)
+  const [selectedBuilding, setSelectedBuilding] = useState(null)
+  const [toast, setToast] = useState(null)
   const [amenities, setAmenities] = useState({})       // { FD6: [...], CE7: [...] }
   const [amenityLoading, setAmenityLoading] = useState(false)
   const [enabledCats, setEnabledCats] = useState(() => new Set(AMENITY_CATS.map(c => c.code)))
@@ -399,12 +401,41 @@ export default function GisPage() {
     return { fillColor: '#bbb', fillOpacity: 0.5, weight: 0.3, color: 'rgba(0,0,0,0.06)' }
   }, [visibleSection, clickedPoint, filteredSet, ageFilterYear, circleEnabled, missingFilter])
 
+  const showToast = useCallback((msg) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }, [])
+
+  const copyAddress = useCallback(async (address) => {
+    try {
+      await navigator.clipboard.writeText(address)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = address
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+  }, [])
+
+  const openEum = useCallback(async (address) => {
+    await copyAddress(address)
+    window.open('https://www.eum.go.kr/web/ar/lu/luLandDet.jsp', '_blank')
+    showToast('주소가 복사되었습니다. 토지이음에서 붙여넣기하세요')
+  }, [copyAddress, showToast])
+
   const onEachBuilding = useCallback((feature, layer) => {
     layer.on({
       mouseover: e => { e.target.setStyle({ weight: 1.5, color: '#333', fillOpacity: 0.95 }); e.target.bringToFront() },
       mouseout: e => { if (geoRef.current) geoRef.current.resetStyle(e.target) },
+      click: async () => {
+        setSelectedBuilding(feature)
+        await copyAddress(feature.properties.address || '')
+        showToast('📋 주소가 복사되었습니다')
+      },
     })
-  }, [])
+  }, [copyAddress, showToast])
 
   const tileUrl = visibleSection === 'figground'
     ? 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
@@ -423,16 +454,47 @@ export default function GisPage() {
             <p className="g-header-sub">도시 환경 분석 플랫폼</p>
           </div>
 
+          {/* 뷰 토글 — 항상 고정 */}
+          {!loading && (
+            <div className="g-view-toggle-fixed">
+              <button
+                className={`g-view-btn ${circleEnabled ? 'active' : ''}`}
+                onClick={() => setCircleEnabled(true)}
+              >반경 분석</button>
+              <button
+                className={`g-view-btn ${!circleEnabled ? 'active' : ''}`}
+                onClick={() => setCircleEnabled(false)}
+              >전체 보기</button>
+            </div>
+          )}
+
           {loading && <div className="g-empty">데이터 로딩 중...</div>}
 
-          {!loading && !clickedPoint && (
+          {!loading && !clickedPoint && circleEnabled && (
             <div className="g-empty">
               <div className="g-empty-icon">⊕</div>
               <p>지도에서 분석할 위치를<br />클릭하세요</p>
             </div>
           )}
 
-          {!loading && clickedPoint && (
+          {/* 전체 보기 + 건물 선택 → 건물 상세 카드 */}
+          {!loading && !circleEnabled && selectedBuilding && (
+            <BuildingDetailCard
+              feature={selectedBuilding}
+              zoningData={zoningData}
+              onClose={() => setSelectedBuilding(null)}
+              onOpenEum={() => openEum(selectedBuilding.properties.address)}
+            />
+          )}
+
+          {!loading && !circleEnabled && !selectedBuilding && (
+            <div className="g-empty">
+              <div className="g-empty-icon">⊕</div>
+              <p>건물을 클릭하면<br />상세 정보를 확인할 수 있습니다</p>
+            </div>
+          )}
+
+          {!loading && clickedPoint && circleEnabled && (
             <div className="g-sections">
 
               {/* ── Pedestrian Shed ── */}
@@ -470,16 +532,6 @@ export default function GisPage() {
 
               {/* ── 슬라이더 (sticky 고정) ── */}
               <div className="g-sticky-controls">
-                <div className="g-view-toggle">
-                  <button
-                    className={`g-view-btn ${circleEnabled ? 'active' : ''}`}
-                    onClick={() => setCircleEnabled(true)}
-                  >반경 분석</button>
-                  <button
-                    className={`g-view-btn ${!circleEnabled ? 'active' : ''}`}
-                    onClick={() => setCircleEnabled(false)}
-                  >전체 보기</button>
-                </div>
                 {circleEnabled && (
                   <>
                     <div className="g-slider-row">
@@ -501,6 +553,27 @@ export default function GisPage() {
                   </>
                 )}
               </div>
+
+              {/* ── 선택된 건물 정보 (반경 분석 모드: 간략) ── */}
+              {selectedBuilding && circleEnabled && (
+                <div className="g-selected-building">
+                  <div className="g-selected-header">
+                    <div className="g-selected-info">
+                      {selectedBuilding.properties.bldNm && <div className="g-selected-name">{selectedBuilding.properties.bldNm}</div>}
+                      <div className="g-selected-address">{selectedBuilding.properties.address}</div>
+                    </div>
+                    <button className="g-selected-close" onClick={() => setSelectedBuilding(null)}>✕</button>
+                  </div>
+                  <div className="g-selected-details">
+                    {selectedBuilding.properties.vlRat > 0 && <span>용적률 {selectedBuilding.properties.vlRat}%</span>}
+                    {selectedBuilding.properties.grndFlrCnt > 0 && <span>{selectedBuilding.properties.grndFlrCnt}층</span>}
+                    {selectedBuilding.properties.mainPurps && <span>{selectedBuilding.properties.mainPurps}</span>}
+                  </div>
+                  <button className="g-eum-btn" onClick={() => openEum(selectedBuilding.properties.address)}>
+                    🔗 토지이음에서 열람
+                  </button>
+                </div>
+              )}
 
               <div className="g-section-divider" />
 
@@ -675,6 +748,8 @@ export default function GisPage() {
               <LandmarkLayer landmarks={filteredLandmarks} clickedPoint={clickedPoint} radius={radius} circleEnabled={circleEnabled} />
             )}
           </MapContainer>
+
+          {toast && <div className="g-toast">{toast}</div>}
 
           <button
             className={`g-survey-toggle ${showSurveyArea ? 'active' : ''}`}
@@ -1930,6 +2005,130 @@ function SurveyAreaLayer({ data }) {
   }, [map, data])
 
   return null
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  건물 상세 카드 (전체 보기 모드)
+// ═══════════════════════════════════════════════════════════════
+function BuildingDetailCard({ feature, zoningData, onClose, onOpenEum }) {
+  const p = feature.properties
+  const currentYear = 2026
+
+  // 건물 연령
+  const buildYear = getBuildYear(p)
+  const age = buildYear ? currentYear - buildYear : null
+
+  // 바닥면적 (폴리곤)
+  const footprint = useMemo(() => {
+    try { return Math.round(turf.area(feature)) } catch { return null }
+  }, [feature])
+
+  // 용도지역 판별
+  const zoning = useMemo(() => {
+    if (!zoningData) return null
+    const centroid = getCentroid(feature)
+    if (!centroid) return null
+    const pt = turf.point(centroid)
+    for (const zf of zoningData.features) {
+      try {
+        if (turf.booleanPointInPolygon(pt, zf)) {
+          const name = zf.properties['용도지역명']
+          if (name && !name.startsWith('기타')) return name
+        }
+      } catch { /* skip */ }
+    }
+    return null
+  }, [feature, zoningData])
+
+  const maxFar = zoning ? getMaxFAR(zoning) : null
+  const farUtil = (p.vlRat > 0 && maxFar) ? Math.round(p.vlRat / maxFar * 100) : null
+
+  return (
+    <div className="g-detail-card">
+      {/* 헤더 */}
+      <div className="g-detail-header">
+        <div>
+          {p.bldNm && <h2 className="g-detail-name">{p.bldNm}</h2>}
+          <p className="g-detail-address">{p.address}</p>
+        </div>
+        <button className="g-selected-close" onClick={onClose}>✕</button>
+      </div>
+
+      {/* 핵심 수치 */}
+      <div className="g-detail-stats">
+        <div className="g-detail-stat-main">
+          <span className="g-detail-stat-value" style={{ color: getVlRatColor(p.vlRat) }}>
+            {p.vlRat > 0 ? `${p.vlRat}%` : '—'}
+          </span>
+          <span className="g-detail-stat-label">용적률</span>
+        </div>
+        <div className="g-detail-stat-main">
+          <span className="g-detail-stat-value">{p.bcRat > 0 ? `${p.bcRat}%` : '—'}</span>
+          <span className="g-detail-stat-label">건폐율</span>
+        </div>
+        <div className="g-detail-stat-main">
+          <span className="g-detail-stat-value">{p.grndFlrCnt > 0 ? `${p.grndFlrCnt}층` : '—'}</span>
+          <span className="g-detail-stat-label">지상 층수</span>
+        </div>
+      </div>
+
+      {/* 상세 정보 */}
+      <div className="g-detail-section">
+        <div className="g-sub-title">건물 정보</div>
+        <div className="g-detail-rows">
+          <DetailRow label="주용도" value={p.mainPurps || '—'} />
+          <DetailRow label="구조" value={p.strct || '—'} />
+          <DetailRow label="지하 층수" value={p.ugrndFlrCnt > 0 ? `${p.ugrndFlrCnt}층` : '—'} />
+          <DetailRow label="사용승인일" value={p.useAprDay || '—'} />
+          {age && <DetailRow label="건물 연령" value={`${age}년`} />}
+        </div>
+      </div>
+
+      {/* 면적 정보 */}
+      <div className="g-detail-section">
+        <div className="g-sub-title">면적</div>
+        <div className="g-detail-rows">
+          <DetailRow label="연면적" value={p.totArea > 0 ? `${p.totArea.toLocaleString()}㎡` : '—'} />
+          <DetailRow label="대지면적" value={p.platArea > 0 ? `${p.platArea.toLocaleString()}㎡` : '—'} />
+          {footprint && <DetailRow label="바닥면적 (폴리곤)" value={`${footprint.toLocaleString()}㎡`} />}
+        </div>
+      </div>
+
+      {/* 용도지역 */}
+      {zoning && (
+        <div className="g-detail-section">
+          <div className="g-sub-title">용도지역</div>
+          <div className="g-detail-zoning">
+            <span className="g-detail-zoning-dot" style={{ background: getZoningColor(zoning) }} />
+            <span className="g-detail-zoning-name">{zoning}</span>
+            {maxFar && <span className="g-detail-zoning-far">허용 {maxFar}%</span>}
+          </div>
+          {farUtil !== null && (
+            <div className="g-detail-far-util">
+              <div className="g-detail-far-bar">
+                <div className="g-detail-far-fill" style={{ width: `${Math.min(farUtil, 100)}%` }} />
+              </div>
+              <span className="g-detail-far-text">FAR 활용률 {farUtil}%</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 토지이음 버튼 */}
+      <button className="g-eum-btn" onClick={onOpenEum}>
+        🔗 토지이음에서 열람
+      </button>
+    </div>
+  )
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <div className="g-detail-row">
+      <span className="g-detail-row-label">{label}</span>
+      <span className="g-detail-row-value">{value}</span>
+    </div>
+  )
 }
 
 // ─── 공통 ───────────────────────────────────────────────────────

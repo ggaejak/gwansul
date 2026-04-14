@@ -7,7 +7,7 @@ import os
 from pyproj import Transformer
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-GIS_PATH = os.path.join(BASE_DIR, '../../src/gis/data/junggu-buildings-gis.geojson')
+GIS_PATH = os.path.join(BASE_DIR, 'raw/junggu-buildings-gis.geojson')
 OUT_PATH = os.path.join(BASE_DIR, '../../src/gis/data/junggu-buildings-final.geojson')
 
 transformer = Transformer.from_crs('EPSG:5186', 'EPSG:4326', always_xy=True)
@@ -41,10 +41,11 @@ for i, feat in enumerate(gis['features']):
         'regType': p.get('A7', ''),          # 일반/집합
         'mainPurps': p.get('A9', ''),        # 주용도
         'strct': p.get('A11', ''),           # 구조
-        'bcRat': float(p.get('A12') or 0),   # 건폐율
+        'archArea': float(p.get('A12') or 0), # 건축면적 (㎡)
         'useAprDay': str(p.get('A13') or ''),# 사용승인일
         'totArea': float(p.get('A14') or 0), # 연면적
         'platArea': float(p.get('A15') or 0),# 대지면적
+        'bcRat': round(float(p.get('A12') or 0) / float(p.get('A15') or 1) * 100, 2) if float(p.get('A12') or 0) > 0 and float(p.get('A15') or 0) > 0 else 0,  # 건폐율 계산
         'vlRat': float(p.get('A18') or 0),   # 용적률
         'grndFlrCnt': int(p.get('A26') or 0),# 지상층수
         'ugrndFlrCnt': int(p.get('A27') or 0),# 지하층수
@@ -79,3 +80,19 @@ with open(OUT_PATH, 'w', encoding='utf-8') as f:
 
 print(f'저장: {OUT_PATH}')
 print(f'파일 크기: {os.path.getsize(OUT_PATH) / (1024*1024):.1f} MB')
+
+# lite 버전 (좌표 소수점 5자리, 공백 없이 압축)
+LITE_PATH = OUT_PATH.replace('.geojson', '-lite.geojson')
+def simplify_coords(coords):
+    if isinstance(coords[0], (int, float)):
+        return [round(coords[0], 5), round(coords[1], 5)]
+    return [simplify_coords(c) for c in coords]
+
+for feat in result['features']:
+    feat['geometry']['coordinates'] = simplify_coords(feat['geometry']['coordinates'])
+
+with open(LITE_PATH, 'w', encoding='utf-8') as f:
+    json.dump(result, f, ensure_ascii=False, separators=(',', ':'))
+
+print(f'저장: {LITE_PATH}')
+print(f'파일 크기: {os.path.getsize(LITE_PATH) / (1024*1024):.1f} MB')

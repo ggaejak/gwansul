@@ -105,7 +105,24 @@ html.gis-mode .hamburger span    { background: #555 !important; }
   box-shadow: 0 2px 4px rgba(0,0,0,0.08);
 }
 
-/* ─── View Toggle ──────────────────────────────────────────── */
+/* ─── View Toggle (항상 고정) ──────────────────────────────── */
+.g-view-toggle-fixed {
+  display: flex;
+  gap: 0;
+  margin: 0;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+.g-view-toggle-fixed .g-view-btn {
+  border-radius: 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+}
+.g-view-toggle-fixed .g-view-btn.active {
+  border-radius: 0;
+  border-bottom: 2px solid #111;
+}
+
 .g-view-toggle {
   display: flex;
   gap: 0;
@@ -834,6 +851,220 @@ html.gis-mode .hamburger span    { background: #555 !important; }
   font-size: 9px !important;
 }
 .g-map .leaflet-control-attribution a { color: #999 !important; }
+
+/* ─── Selected Building + Toast ─────────────────────────────── */
+.g-selected-building {
+  padding: 16px 24px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e0e0e0;
+}
+.g-selected-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.g-selected-info { flex: 1; }
+.g-selected-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 2px;
+}
+.g-selected-address {
+  font-size: 12px;
+  color: #888;
+}
+.g-selected-close {
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #bbb;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.g-selected-close:hover { color: #666; }
+.g-selected-details {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.g-selected-details span {
+  font-size: 12px;
+  color: #555;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+.g-eum-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Noto Sans KR', sans-serif;
+  color: #555;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.g-eum-btn:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+  color: #111;
+}
+
+.g-toast {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 1000;
+  pointer-events: none;
+  animation: g-toast-fade 2.5s ease forwards;
+  white-space: nowrap;
+}
+@keyframes g-toast-fade {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ─── Building Detail Card (전체 보기 모드) ──────────────── */
+.g-detail-card {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.g-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+.g-detail-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111;
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+.g-detail-address {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
+}
+.g-detail-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.g-detail-stat-main {
+  padding: 14px 12px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  text-align: center;
+}
+.g-detail-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+  display: block;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+.g-detail-stat-label {
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 4px;
+  display: block;
+}
+.g-detail-section {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.g-detail-section:last-of-type { border-bottom: none; }
+.g-detail-rows {
+  display: flex;
+  flex-direction: column;
+}
+.g-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f8f8f8;
+}
+.g-detail-row:last-child { border-bottom: none; }
+.g-detail-row-label {
+  font-size: 13px;
+  color: #999;
+}
+.g-detail-row-value {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  text-align: right;
+}
+
+/* 용도지역 */
+.g-detail-zoning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.g-detail-zoning-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+.g-detail-zoning-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+.g-detail-zoning-far {
+  font-size: 12px;
+  color: #aaa;
+  margin-left: auto;
+}
+
+/* FAR 활용률 바 */
+.g-detail-far-util { margin-top: 6px; }
+.g-detail-far-bar {
+  height: 6px;
+  background: #e8e8e8;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.g-detail-far-fill {
+  height: 100%;
+  background: #111;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.g-detail-far-text {
+  font-size: 12px;
+  color: #888;
+  font-weight: 500;
+}
 
 /* ─── Survey Area Toggle ───────────────────────────────────── */
 .g-survey-toggle {
