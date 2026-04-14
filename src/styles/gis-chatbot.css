@@ -1,0 +1,237 @@
+/* ═══════════════════════════════════════════════════════════════
+   GIS Chatbot — Floating chat widget
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ─── Toggle Button ───────────────────────────────────────────── */
+.gc-toggle {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #111;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.gc-toggle:hover {
+  transform: scale(1.08);
+  background: #333;
+}
+
+/* ─── Panel ───────────────────────────────────────────────────── */
+.gc-panel {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 380px;
+  height: 500px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Header ──────────────────────────────────────────────────── */
+.gc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+.gc-header-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111;
+  letter-spacing: -0.01em;
+}
+.gc-header-sub {
+  font-size: 11px;
+  color: #999;
+  margin-left: 8px;
+  font-weight: 400;
+}
+.gc-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #999;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.gc-close:hover {
+  background: #f0f0f0;
+  color: #111;
+}
+
+/* ─── Messages ────────────────────────────────────────────────── */
+.gc-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #ddd transparent;
+}
+.gc-messages::-webkit-scrollbar       { width: 3px; }
+.gc-messages::-webkit-scrollbar-track { background: transparent; }
+.gc-messages::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+
+.gc-msg {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.65;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.gc-msg.assistant {
+  align-self: flex-start;
+  background: #f5f5f5;
+  color: #222;
+  border-bottom-left-radius: 4px;
+}
+.gc-msg.user {
+  align-self: flex-end;
+  background: #111;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+/* ─── Empty / Placeholder ─────────────────────────────────────── */
+.gc-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+  color: #bbb;
+}
+.gc-empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+.gc-empty-text {
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ─── Typing Indicator ────────────────────────────────────────── */
+.gc-typing {
+  display: flex;
+  gap: 4px;
+  padding: 10px 14px;
+  align-self: flex-start;
+}
+.gc-typing-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #bbb;
+  animation: gc-bounce 1.2s infinite;
+}
+.gc-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.gc-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes gc-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
+}
+
+/* ─── Input Area ──────────────────────────────────────────────── */
+.gc-input-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+.gc-input {
+  flex: 1;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: 'Noto Sans KR', sans-serif;
+  outline: none;
+  background: #fafafa;
+  transition: border-color 0.15s;
+}
+.gc-input:focus {
+  border-color: #999;
+  background: #fff;
+}
+.gc-input::placeholder {
+  color: #bbb;
+}
+.gc-send {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: #111;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.gc-send:hover { background: #333; }
+.gc-send:disabled {
+  background: #ddd;
+  cursor: not-allowed;
+}
+
+/* ─── Limit Notice ────────────────────────────────────────────── */
+.gc-limit {
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #999;
+  border-top: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+.gc-limit button {
+  background: none;
+  border: none;
+  color: #111;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 12px;
+}
+
+/* ─── Error ───────────────────────────────────────────────────── */
+.gc-error {
+  padding: 8px 14px;
+  margin: 0 16px 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: center;
+}

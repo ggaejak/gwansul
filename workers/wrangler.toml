@@ -1,0 +1,12 @@
+name = "gwansul-api"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+# R2 버킷 바인딩 (기존 아티클 PDF 저장소)
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "gwansul-articles"
+
+# 시크릿 (wrangler secret put 으로 설정):
+#   ANTHROPIC_API_KEY — Claude API 키
+#   ADMIN_PASSWORD    — 관리자 비밀번호
