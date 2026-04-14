@@ -1156,3 +1156,126 @@ html.gis-mode .hamburger span    { background: #555 !important; }
   text-align: center;
   padding: 16px 0;
 }
+
+/* ─── Mobile Handle (데스크톱에서 숨김) ─────────────────────── */
+.g-mobile-handle { display: none; }
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile (768px 이하) — Bottom Sheet
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .gis-layout {
+    flex-direction: column;
+  }
+
+  /* 지도: 전체 화면 */
+  .g-map {
+    position: fixed;
+    top: 60px;
+    left: 0; right: 0; bottom: 0;
+    z-index: 1;
+  }
+
+  /* 패널: 바텀 시트 */
+  .g-panel {
+    position: fixed;
+    left: 0; right: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 20;
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.12);
+    transition: height 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    overflow: hidden;
+  }
+
+  /* 시트 높이 단계 */
+  .g-panel.g-mobile-sheet-0 { height: 48px; overflow: hidden; }
+  .g-panel.g-mobile-sheet-1 { height: 45vh; overflow-y: auto; }
+  .g-panel.g-mobile-sheet-2 { height: 85vh; overflow-y: auto; }
+
+  /* 드래그 핸들 */
+  .g-mobile-handle {
+    display: flex;
+    justify-content: center;
+    padding: 8px 0 4px;
+    cursor: grab;
+    flex-shrink: 0;
+    touch-action: none;
+  }
+  .g-mobile-handle-bar {
+    width: 36px;
+    height: 4px;
+    background: #ccc;
+    border-radius: 2px;
+  }
+
+  /* 숨김 상태: 헤더/콘텐츠 숨기고 뷰 토글만 */
+  .g-mobile-sheet-0 .g-header { display: none; }
+  .g-mobile-sheet-0 .g-sections { display: none; }
+  .g-mobile-sheet-0 .g-empty { display: none; }
+  .g-mobile-sheet-0 .g-sticky-controls { display: none; }
+  .g-mobile-sheet-0 .g-detail-card { display: none; }
+  .g-mobile-sheet-0 .g-selected-building { display: none; }
+
+  /* 뷰 토글 축소 */
+  .g-view-toggle-fixed .g-view-btn {
+    padding: 8px 0;
+    font-size: 12px;
+  }
+
+  /* 헤더 축소 */
+  .g-header { padding: 8px 16px 6px; }
+  .g-header-badge { display: none; }
+  .g-header-title { font-size: 15px; }
+  .g-header-sub { display: none; }
+
+  /* sticky 슬라이더 */
+  .g-sticky-controls { padding: 8px 16px 6px; }
+  .g-slider-value { font-size: 16px; }
+
+  /* 섹션 */
+  .g-sec { padding: 14px 16px; }
+  .g-sec-title { font-size: 16px; }
+  .g-sec-desc { font-size: 11px; }
+
+  /* 통계 카드 */
+  .g-stats-row { gap: 6px; }
+  .g-stat { padding: 8px 10px; }
+  .g-stat-value { font-size: 16px; }
+  .g-stat-label { font-size: 10px; }
+
+  /* 건물 상세 카드 */
+  .g-detail-card { padding: 14px 16px; }
+  .g-detail-name { font-size: 15px; }
+  .g-detail-stats { gap: 6px; }
+  .g-detail-stat-main { padding: 10px 8px; }
+  .g-detail-stat-value { font-size: 16px; }
+
+  /* 답사 영역 버튼 */
+  .g-survey-toggle {
+    top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  /* 토스트 */
+  .g-toast { bottom: auto; top: 80px; }
+
+  /* 줌 컨트롤 */
+  .g-map .leaflet-control-zoom {
+    margin-bottom: 60px !important;
+    margin-right: 8px !important;
+  }
+
+  /* 결측값 카드 */
+  .g-missing-grid { gap: 6px; }
+  .g-missing-card { padding: 8px; }
+
+  /* 챗봇 */
+  .gis-chatbot-toggle {
+    bottom: 56px !important;
+    right: 12px !important;
+  }
+}

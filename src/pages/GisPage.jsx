@@ -192,6 +192,8 @@ export default function GisPage() {
   const [showSurveyArea, setShowSurveyArea] = useState(false)
   const [selectedBuilding, setSelectedBuilding] = useState(null)
   const [toast, setToast] = useState(null)
+  const [mobileSheet, setMobileSheet] = useState(0) // 0=숨김, 1=작게, 2=크게
+  const touchYRef = useRef(0)
   const [amenities, setAmenities] = useState({})       // { FD6: [...], CE7: [...] }
   const [amenityLoading, setAmenityLoading] = useState(false)
   const [enabledCats, setEnabledCats] = useState(() => new Set(AMENITY_CATS.map(c => c.code)))
@@ -431,6 +433,7 @@ export default function GisPage() {
       mouseout: e => { if (geoRef.current) geoRef.current.resetStyle(e.target) },
       click: async () => {
         setSelectedBuilding(feature)
+        setMobileSheet(1)
         await copyAddress(feature.properties.address || '')
         showToast('📋 주소가 복사되었습니다')
       },
@@ -446,7 +449,21 @@ export default function GisPage() {
       <Nav />
       <div className="gis-layout">
         {/* 사이드 패널 */}
-        <aside className="g-panel" ref={panelRef}>
+        <aside
+          className={`g-panel g-mobile-sheet-${mobileSheet}`}
+          ref={panelRef}
+          onTouchStart={e => { touchYRef.current = e.touches[0].clientY }}
+          onTouchEnd={e => {
+            const dy = touchYRef.current - e.changedTouches[0].clientY
+            if (Math.abs(dy) < 30) return
+            if (dy > 0) setMobileSheet(s => Math.min(2, s + 1))
+            else setMobileSheet(s => Math.max(0, s - 1))
+          }}
+        >
+          {/* 모바일 드래그 핸들 */}
+          <div className="g-mobile-handle">
+            <div className="g-mobile-handle-bar" />
+          </div>
           {/* 헤더 */}
           <div className="g-header">
             <div className="g-header-badge">관설 Urban Analytics</div>
@@ -692,7 +709,7 @@ export default function GisPage() {
               maxZoom={18}
             />
             <ZoomControl position="bottomright" />
-            <MapClick onClick={p => setClickedPoint(p)} />
+            <MapClick onClick={p => { setClickedPoint(p); setMobileSheet(1) }} />
 
             {buildingData && (
               <BuildingLayer
