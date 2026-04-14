@@ -1278,9 +1278,13 @@ html.gis-mode .hamburger span    { background: #555 !important; }
   .g-missing-grid { gap: 6px; }
   .g-missing-card { padding: 8px; }
 
-  /* 챗봇 */
-  .gis-chatbot-toggle {
-    bottom: 56px !important;
+  /* 챗봇 — 시트 상태에 따라 위치 */
+  .g-map-sheet-0 .gis-chatbot-toggle {
+    bottom: 64px !important;
     right: 12px !important;
+  }
+  .g-map-sheet-1 .gis-chatbot-toggle,
+  .g-map-sheet-2 .gis-chatbot-toggle {
+    display: none !important;
   }
 }

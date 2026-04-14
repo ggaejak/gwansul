@@ -692,7 +692,7 @@ export default function GisPage() {
         </aside>
 
         {/* 지도 */}
-        <div className="g-map">
+        <div className={`g-map g-map-sheet-${mobileSheet}`}>
           <MapContainer
             center={CENTER}
             zoom={15}
