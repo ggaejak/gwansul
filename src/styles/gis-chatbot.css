@@ -235,3 +235,23 @@
   font-size: 12px;
   text-align: center;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Mobile
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .gc-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    bottom: auto;
+    right: auto;
+    width: calc(100vw - 32px);
+    height: calc(100vh - 120px);
+    max-width: 400px;
+    max-height: 600px;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  }
+}

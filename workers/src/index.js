@@ -158,6 +158,10 @@ async function handleChat(request, env) {
 
   const systemContent = `${SYSTEM_PROMPT}\n\n--- 분석 데이터 ---\n${context}`
 
+  // 디버깅: 요청 정보 로깅
+  const ua = request.headers.get('User-Agent') || 'unknown'
+  console.log(`Chat request - UA: ${ua.slice(0, 80)}, messages: ${trimmed.length}, context length: ${context.length}`)
+
   const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -177,8 +181,8 @@ async function handleChat(request, env) {
   if (!anthropicRes.ok) {
     const errText = await anthropicRes.text().catch(() => '')
     console.error('Anthropic API error:', anthropicRes.status, errText)
-    return new Response(`AI 응답 오류 (${anthropicRes.status})`, {
-      status: 502,
+    return new Response(`AI 응답 오류 (${anthropicRes.status}): ${errText.slice(0, 200)}`, {
+      status: anthropicRes.status,
       headers: CORS,
     })
   }
