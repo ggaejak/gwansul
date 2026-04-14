@@ -452,16 +452,18 @@ export default function GisPage() {
         <aside
           className={`g-panel g-mobile-sheet-${mobileSheet}`}
           ref={panelRef}
-          onTouchStart={e => { touchYRef.current = e.touches[0].clientY }}
-          onTouchEnd={e => {
-            const dy = touchYRef.current - e.changedTouches[0].clientY
-            if (Math.abs(dy) < 30) return
-            if (dy > 0) setMobileSheet(s => Math.min(2, s + 1))
-            else setMobileSheet(s => Math.max(0, s - 1))
-          }}
         >
-          {/* 모바일 드래그 핸들 */}
-          <div className="g-mobile-handle">
+          {/* 모바일 드래그 핸들 — 이 영역에서만 스와이프 */}
+          <div
+            className="g-mobile-handle"
+            onTouchStart={e => { touchYRef.current = e.touches[0].clientY }}
+            onTouchEnd={e => {
+              const dy = touchYRef.current - e.changedTouches[0].clientY
+              if (Math.abs(dy) < 30) return
+              if (dy > 0) setMobileSheet(s => Math.min(2, s + 1))
+              else setMobileSheet(s => Math.max(0, s - 1))
+            }}
+          >
             <div className="g-mobile-handle-bar" />
           </div>
           {/* 헤더 */}

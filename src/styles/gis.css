@@ -1194,7 +1194,7 @@ html.gis-mode .hamburger span    { background: #555 !important; }
   .g-panel.g-mobile-sheet-1 { height: 45vh; overflow-y: auto; }
   .g-panel.g-mobile-sheet-2 { height: 85vh; overflow-y: auto; }
 
-  /* 드래그 핸들 */
+  /* 드래그 핸들 — 상단 고정 */
   .g-mobile-handle {
     display: flex;
     justify-content: center;
@@ -1202,6 +1202,11 @@ html.gis-mode .hamburger span    { background: #555 !important; }
     cursor: grab;
     flex-shrink: 0;
     touch-action: none;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: #fff;
+    border-radius: 16px 16px 0 0;
   }
   .g-mobile-handle-bar {
     width: 36px;
