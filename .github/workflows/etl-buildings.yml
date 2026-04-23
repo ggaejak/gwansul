@@ -1,0 +1,82 @@
+name: ETL — Load Buildings to Supabase
+
+# ============================================================
+# 이 workflow 는 수동 실행 전용 (workflow_dispatch 만).
+#
+# ⚠️  cron / push / schedule 트리거를 추가하지 말 것.
+#     docs/migration-questions.md Q2 에서 "재수집 주기는 수동 실행" 으로
+#     확정된 Phase 1 정책이다. 자동화가 필요해지면 사용자와 주기를
+#     재합의한 뒤에만 트리거를 추가한다.
+#
+# 시크릿 요구사항 (Settings → Secrets and variables → Actions):
+#   - SUPABASE_URL
+#   - SUPABASE_SERVICE_KEY   (service_role, RLS 우회. anon 아님)
+#
+# 안전 재실행:
+#   이 workflow 는 scripts/etl/loadBuildingsToSupabase.py 를 호출한다.
+#   해당 스크립트는 buildings 테이블이 비어 있지 않으면 중단하므로,
+#   재적재 전에는 Supabase SQL Editor 에서 수동으로
+#     TRUNCATE buildings RESTART IDENTITY;
+#   를 실행해야 한다.
+# ============================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: '처음 N 건만 업로드 (빈값이면 전체). 숫자만.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Dry-run (변환 검증만, DB 쓰기 없음)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: scripts/etl/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r scripts/etl/requirements.txt
+
+      - name: Run ETL
+        # 시크릿·인풋을 shell 로 치환(${{ }})하지 않고 env 변수로 전달 —
+        # GitHub Actions 권장 보안 패턴 (shell injection 방지).
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          INPUT_LIMIT: ${{ inputs.limit }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          ARGS="--verbose"
+
+          if [ -n "$INPUT_LIMIT" ]; then
+            # 숫자만 허용 (정규식 검증)
+            if ! [[ "$INPUT_LIMIT" =~ ^[0-9]+$ ]]; then
+              echo "::error::limit 은 양의 정수여야 합니다. 입력: '$INPUT_LIMIT'"
+              exit 1
+            fi
+            ARGS="$ARGS --limit $INPUT_LIMIT"
+          fi
+
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+
+          echo "실행 인자: python scripts/etl/loadBuildingsToSupabase.py $ARGS"
+          python scripts/etl/loadBuildingsToSupabase.py $ARGS
