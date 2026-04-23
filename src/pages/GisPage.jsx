@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import Nav from '../components/Nav'
 import GisChatbot from '../components/gis/GisChatbot'
+import { fetchBuildingsNearPoint, getBuildingsMode } from '../data/buildings'
 import landmarksData from '../gis/data/junggu-landmarks.json'
 import surveyAreaData from '../gis/data/survey-area.json'
 import 'leaflet/dist/leaflet.css'
@@ -208,7 +209,8 @@ export default function GisPage() {
 
   useEffect(() => {
     Promise.all([
-      fetch(new URL('../gis/data/junggu-buildings-final-lite.geojson', import.meta.url)).then(r => r.json()),
+      // 건물: 정적 모드면 전체 반환, DB 모드면 중구 중심 기준 반경 1000m 내만
+      fetchBuildingsNearPoint(CENTER[1], CENTER[0], 1000),
       fetch(new URL('../gis/data/junggu-transit.json', import.meta.url)).then(r => r.json()),
       fetch(new URL('../gis/data/junggu-demographics.json', import.meta.url)).then(r => r.json()),
       fetch(new URL('../gis/data/junggu-commerce.json', import.meta.url)).then(r => r.json()),
@@ -222,6 +224,21 @@ export default function GisPage() {
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  // DB 모드: 중심점(클릭) 변경 시 반경 내 건물만 재조회 (300ms debounce).
+  // 정적 모드에서는 초기 useEffect 가 이미 전체를 로드했으므로 스킵.
+  // 반경 슬라이더 조정은 기존 클라이언트 필터(useMemo)에서 처리 — 여기선 재호출 안 함.
+  useEffect(() => {
+    if (getBuildingsMode() === 'static') return
+    if (!clickedPoint) return
+    const [lat, lng] = clickedPoint
+    const timer = setTimeout(() => {
+      fetchBuildingsNearPoint(lng, lat, 1000)
+        .then(setBuildingData)
+        .catch(err => console.warn('[GisPage] buildings 재조회 실패:', err))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [clickedPoint])
 
   // 스크롤 기반 활성 섹션 감지
   useEffect(() => {
