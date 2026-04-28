@@ -1,0 +1,71 @@
+/* ============================================================
+   GIS 첫 진입 안내 펄스 — clickedPoint 가 null 일 때만 표시.
+   transform/opacity 만 애니메이트 → GPU 가속, JS 인터벌 없음.
+   ============================================================ */
+
+.pulse-icon-wrap {
+  /* Leaflet 이 14x14 를 부여. ring 이 scale 로 박스 밖으로 커지므로 visible. */
+  overflow: visible;
+}
+
+/* 안쪽 점 — 14x14, 클릭 영역 */
+.pulse-dot {
+  position: absolute;
+  inset: 0;
+  background: #2563eb;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(37, 99, 235, 0.5);
+  cursor: pointer;
+  z-index: 2;
+}
+
+/* 바깥으로 퍼지는 링 (2 개를 1 초 차이로 교차 재생) */
+.pulse-ring {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #2563eb;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  animation: pulse-ring 2s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+.pulse-ring.pulse-ring-2 {
+  animation-delay: 1s;
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.75; }
+  80%  {                         opacity: 0.05; }
+  100% { transform: scale(5.5); opacity: 0; }
+}
+
+/* 안내 라벨 — dot 아래 */
+.pulse-label {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background: rgba(17, 17, 17, 0.85);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  pointer-events: none;
+  /* 부드럽게 등장 */
+  animation: pulse-label-in 0.4s ease-out 0.1s both;
+}
+
+@keyframes pulse-label-in {
+  from { opacity: 0; transform: translate(-50%, 4px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* 모션 민감 사용자: 애니메이션 비활성 */
+@media (prefers-reduced-motion: reduce) {
+  .pulse-ring { animation: none; opacity: 0.4; }
+  .pulse-label { animation: none; }
+}

@@ -14,6 +14,7 @@ import GisChatbot from '../components/gis/GisChatbot'
 import ModeToggle from '../components/gis/ModeToggle'
 import ArticlePanel from '../components/gis/ArticlePanel'
 import ArticleMapOverlay from '../components/gis/ArticleMapOverlay'
+import PulseGuide from '../components/gis/PulseGuide'
 import { fetchBuildingsNearPoint, getBuildingsMode } from '../data/buildings'
 import { fetchZoningIntersect, getZoningMode } from '../data/zoning'
 import landmarksData from '../gis/data/junggu-landmarks.json'
@@ -828,6 +829,14 @@ export default function GisPage() {
             />
             <ZoomControl position="bottomright" />
             <MapClick onClick={p => { setClickedPoint(p); setMobileSheet(1) }} />
+
+            {/* 첫 진입 안내 펄스 — clickedPoint 가 없을 때만 (분석 모드 + 반경 분석 모드) */}
+            {!clickedPoint && mode === 'analysis' && circleEnabled && (
+              <PulseGuide
+                position={CENTER}
+                onClick={() => { setClickedPoint(CENTER); setMobileSheet(1) }}
+              />
+            )}
 
             {buildingData && (
               <BuildingLayer
