@@ -11,6 +11,7 @@ import {
 import Nav from '../components/Nav'
 import GisChatbot from '../components/gis/GisChatbot'
 import { fetchBuildingsNearPoint, getBuildingsMode } from '../data/buildings'
+import { fetchZoningIntersect, getZoningMode } from '../data/zoning'
 import landmarksData from '../gis/data/junggu-landmarks.json'
 import surveyAreaData from '../gis/data/survey-area.json'
 import 'leaflet/dist/leaflet.css'
@@ -214,7 +215,8 @@ export default function GisPage() {
       fetch(new URL('../gis/data/junggu-transit.json', import.meta.url)).then(r => r.json()),
       fetch(new URL('../gis/data/junggu-demographics.json', import.meta.url)).then(r => r.json()),
       fetch(new URL('../gis/data/junggu-commerce.json', import.meta.url)).then(r => r.json()),
-      fetch(new URL('../gis/data/land_use_junggu.geojson', import.meta.url)).then(r => r.json()),
+      // 용도지역: 정적 모드면 전체(중구+종로구), DB 모드면 중구 중심 기준 반경 1000m 내만
+      fetchZoningIntersect(CENTER[1], CENTER[0], 1000),
     ]).then(([buildings, transit, demo, commerce, zoning]) => {
       setBuildingData(buildings)
       setTransitData(transit)
@@ -236,6 +238,21 @@ export default function GisPage() {
       fetchBuildingsNearPoint(lng, lat, 1000)
         .then(setBuildingData)
         .catch(err => console.warn('[GisPage] buildings 재조회 실패:', err))
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [clickedPoint])
+
+  // DB 모드: 중심점 변경 시 반경 내 용도지역 폴리곤만 재조회 (300ms debounce).
+  // turf.booleanIntersects 는 클라이언트 useMemo(filteredZoning) 에 그대로 남고,
+  // 여기서는 데이터 소스(zoningData)만 교체. 정적 모드는 초기 1회 로드.
+  useEffect(() => {
+    if (getZoningMode() === 'static') return
+    if (!clickedPoint) return
+    const [lat, lng] = clickedPoint
+    const timer = setTimeout(() => {
+      fetchZoningIntersect(lng, lat, 1000)
+        .then(setZoningData)
+        .catch(err => console.warn('[GisPage] zoning 재조회 실패:', err))
     }, 300)
     return () => clearTimeout(timer)
   }, [clickedPoint])
