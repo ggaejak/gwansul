@@ -444,6 +444,13 @@ export default function GisPage() {
 
   // 지도 스타일 — visibleSection + 원 안/밖 구분
   const buildingStyle = useCallback((feature) => {
+    // 첫 진입(클릭 전 + 반경 분석 모드) — 색 분류를 모두 숨겨
+    // 펄스 안내(PulseGuide)에 시선이 집중되게 한다.
+    // 클릭하면 즉시 visibleSection 에 따른 색이 활성화됨.
+    if (circleEnabled && !clickedPoint) {
+      return { fillColor: 'transparent', fillOpacity: 0, weight: 0, color: 'transparent' }
+    }
+
     // 원 비활성 → 전체 건물에 색상 적용 (안/밖 구분 없음)
     const inside = !circleEnabled || !clickedPoint || filteredSet.has(feature.properties.pnu)
 
