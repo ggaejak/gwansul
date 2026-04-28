@@ -5,35 +5,57 @@
    ============================================================ */
 
 /* ─── 모드 토글 (분석 ↔ 아티클) ────────────────────────────── */
-/* g-view-toggle-fixed 와 같은 패턴. border-bottom 으로 active 표시. */
+/* iOS 풍 슬라이드 토글. 양옆에 라벨, active 라벨이 진하게 강조. */
 .ga-mode-toggle {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 14px 24px;
   border-bottom: 1px solid #e0e0e0;
   flex-shrink: 0;
+  user-select: none;
 }
-.ga-mode-btn {
-  flex: 1;
-  padding: 9px 0;
+.ga-mode-label {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: #999;
-  background: #fff;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  color: #ccc;
+  transition: color 0.18s ease;
 }
-.ga-mode-btn:first-child { border-right: 1px solid #e0e0e0; }
-.ga-mode-btn:hover:not(.active) {
-  background: #f5f5f5;
-  color: #555;
-}
-.ga-mode-btn.active {
+.ga-mode-label.active {
   color: #111;
-  border-bottom-color: #111;
   font-weight: 600;
 }
+.ga-mode-switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: #ddd;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+.ga-mode-switch.on { background: #111; }
+.ga-mode-switch:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.ga-mode-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  transition: left 0.2s ease;
+}
+.ga-mode-switch.on .ga-mode-thumb { left: 20px; }
 
 /* ─── 패널 너비 토글 (헤더 우측 상단) ───────────────────────── */
 /* 데스크톱 전용. 모바일에서는 미디어 쿼리로 숨김. */

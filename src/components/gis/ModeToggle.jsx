@@ -1,28 +1,31 @@
 // 사이드바 상단의 "분석 ↔ 아티클" 모드 전환 토글.
-// 기존 g-view-toggle-fixed (반경 분석 / 전체 보기) 위에 위치.
+// 토글 스위치 형태: 양옆 라벨 + 가운데 슬라이드 스위치.
+//
+// off(왼쪽 = 분석)  ●━━━━━
+// on (오른쪽 = 아티클)  ━━━━●
 //
 // controlled component: mode, onChange 만 받음.
-// CSS 는 Step 5 에서 추가.
 
 export default function ModeToggle({ mode, onChange }) {
+  const isArticles = mode === 'articles'
   return (
     <div className="ga-mode-toggle">
-      <button
-        type="button"
-        className={`ga-mode-btn ${mode === 'analysis' ? 'active' : ''}`}
-        onClick={() => onChange('analysis')}
-        aria-pressed={mode === 'analysis'}
-      >
+      <span className={`ga-mode-label ${!isArticles ? 'active' : ''}`}>
         📊 분석
-      </button>
+      </span>
       <button
         type="button"
-        className={`ga-mode-btn ${mode === 'articles' ? 'active' : ''}`}
-        onClick={() => onChange('articles')}
-        aria-pressed={mode === 'articles'}
+        className={`ga-mode-switch ${isArticles ? 'on' : 'off'}`}
+        onClick={() => onChange(isArticles ? 'analysis' : 'articles')}
+        role="switch"
+        aria-checked={isArticles}
+        aria-label="모드 전환"
       >
-        📰 아티클
+        <span className="ga-mode-thumb" />
       </button>
+      <span className={`ga-mode-label ${isArticles ? 'active' : ''}`}>
+        📰 아티클
+      </span>
     </div>
   )
 }
