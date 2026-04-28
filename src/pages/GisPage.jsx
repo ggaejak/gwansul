@@ -555,7 +555,25 @@ export default function GisPage() {
               title={panelWide ? '패널 좁게' : '패널 넓게'}
               aria-label="패널 너비 전환"
             >
-              {panelWide ? '⇥' : '⇤'}
+              {panelWide ? (
+                /* 축소: 오른쪽 세로선 + 왼쪽 방향 화살표 */
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                     stroke="currentColor" strokeWidth="1.6"
+                     strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 3v10" />
+                  <path d="M3 8h7" />
+                  <path d="M7 4l-4 4 4 4" />
+                </svg>
+              ) : (
+                /* 확장: 왼쪽 세로선 + 오른쪽 방향 화살표 */
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                     stroke="currentColor" strokeWidth="1.6"
+                     strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 3v10" />
+                  <path d="M6 8h7" />
+                  <path d="M9 4l4 4-4 4" />
+                </svg>
+              )}
             </button>
           </div>
 
