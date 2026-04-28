@@ -17,7 +17,7 @@ import { useEffect, useState } from 'react'
 import { fetchArticles } from '../../data/articles'
 import { getArticleVisuals } from '../../data/articleVisuals'
 
-export default function ArticlePanel({ selectedArticleId, onSelectArticle }) {
+export default function ArticlePanel({ selectedArticleId, onSelectArticle, panelWide }) {
   const [articles, setArticles] = useState(null)  // null = 로딩 중
 
   useEffect(() => {
@@ -51,7 +51,13 @@ export default function ArticlePanel({ selectedArticleId, onSelectArticle }) {
     return <ArticleList articles={articles} onSelect={onSelectArticle} />
   }
 
-  return <ArticleDetail article={selected} onBack={() => onSelectArticle(null)} />
+  return (
+    <ArticleDetail
+      article={selected}
+      onBack={() => onSelectArticle(null)}
+      panelWide={panelWide}
+    />
+  )
 }
 
 // ─── 목록 ─────────────────────────────────────────────────────
@@ -95,7 +101,7 @@ function ArticleList({ articles, onSelect, notice }) {
 
 // ─── 상세 ─────────────────────────────────────────────────────
 
-function ArticleDetail({ article, onBack }) {
+function ArticleDetail({ article, onBack, panelWide }) {
   const visuals = getArticleVisuals(article.id)
 
   return (
@@ -112,9 +118,11 @@ function ArticleDetail({ article, onBack }) {
       {article.pdfUrl ? (
         <div className="ga-pdf-frame">
           <iframe
-            src={article.pdfUrl}
+            // 패널 너비가 바뀌면 iframe 을 재마운트해 PDF 뷰어가
+            // 새 컨테이너 너비에 맞춰 다시 fit 하도록 함.
+            key={`${article.id}-${panelWide ? 'wide' : 'narrow'}`}
+            src={`${article.pdfUrl}#view=FitH`}
             title={article.title}
-            // PDF 인라인 표시. 새 탭으로 열기는 PDF 뷰어 기본 UI 활용.
           />
         </div>
       ) : (

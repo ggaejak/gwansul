@@ -601,6 +601,7 @@ export default function GisPage() {
             <ArticlePanel
               selectedArticleId={selectedArticleId}
               onSelectArticle={setSelectedArticleId}
+              panelWide={panelWide}
             />
           )}
 
