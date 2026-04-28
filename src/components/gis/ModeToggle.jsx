@@ -11,7 +11,7 @@ export default function ModeToggle({ mode, onChange }) {
   return (
     <div className="ga-mode-toggle">
       <span className={`ga-mode-label ${!isArticles ? 'active' : ''}`}>
-        📊 분석
+        분석
       </span>
       <button
         type="button"
@@ -24,7 +24,7 @@ export default function ModeToggle({ mode, onChange }) {
         <span className="ga-mode-thumb" />
       </button>
       <span className={`ga-mode-label ${isArticles ? 'active' : ''}`}>
-        📰 아티클
+        아티클
       </span>
     </div>
   )
