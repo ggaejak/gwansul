@@ -20,6 +20,7 @@ import landmarksData from '../gis/data/junggu-landmarks.json'
 import surveyAreaData from '../gis/data/survey-area.json'
 import 'leaflet/dist/leaflet.css'
 import '../styles/gis.css'
+import '../styles/gis-articles.css'
 
 const CENTER = [37.5636, 126.9976]
 const BOUNDS = [[37.53, 126.95], [37.60, 127.04]]
