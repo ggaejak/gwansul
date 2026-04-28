@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   MapContainer, TileLayer, GeoJSON, ZoomControl, Circle, Marker, useMapEvents, useMap
 } from 'react-leaflet'
@@ -10,6 +11,9 @@ import {
 } from 'recharts'
 import Nav from '../components/Nav'
 import GisChatbot from '../components/gis/GisChatbot'
+import ModeToggle from '../components/gis/ModeToggle'
+import ArticlePanel from '../components/gis/ArticlePanel'
+import ArticleMapOverlay from '../components/gis/ArticleMapOverlay'
 import { fetchBuildingsNearPoint, getBuildingsMode } from '../data/buildings'
 import { fetchZoningIntersect, getZoningMode } from '../data/zoning'
 import landmarksData from '../gis/data/junggu-landmarks.json'
@@ -202,6 +206,41 @@ export default function GisPage() {
   const amenityCacheRef = useRef({})                    // "lat,lng,radius" → data
   const geoRef = useRef(null)
   const panelRef = useRef(null)
+
+  // ─── 모드 + 선택 아티클 (URL 동기화) ───────────────────────────
+  const [searchParams, setSearchParams] = useSearchParams()
+  const mode = searchParams.get('mode') === 'articles' ? 'articles' : 'analysis'
+  const selectedArticleId = (() => {
+    const raw = searchParams.get('id')
+    if (!raw) return null
+    const n = parseInt(raw, 10)
+    return Number.isFinite(n) ? n : null
+  })()
+
+  const setMode = useCallback((next) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev)
+      if (next === 'articles') p.set('mode', 'articles')
+      else { p.delete('mode'); p.delete('id') }
+      return p
+    })
+  }, [setSearchParams])
+
+  const setSelectedArticleId = useCallback((id) => {
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev)
+      if (id != null) {
+        p.set('mode', 'articles')
+        p.set('id', String(id))
+      } else {
+        p.delete('id')
+      }
+      return p
+    })
+  }, [setSearchParams])
+
+  // 패널 너비 토글 (데스크톱 전용; 모바일은 바텀시트로 대체)
+  const [panelWide, setPanelWide] = useState(false)
 
   useEffect(() => {
     document.documentElement.classList.add('gis-mode')
@@ -486,7 +525,7 @@ export default function GisPage() {
       <div className="gis-layout">
         {/* 사이드 패널 */}
         <aside
-          className={`g-panel g-mobile-sheet-${mobileSheet}`}
+          className={`g-panel g-mobile-sheet-${mobileSheet} g-panel-${mode} ${panelWide ? 'g-panel-wide' : ''}`}
           ref={panelRef}
         >
           {/* 모바일 드래그 핸들 — 이 영역에서만 스와이프 */}
@@ -507,10 +546,23 @@ export default function GisPage() {
             <div className="g-header-badge">관설 Urban Analytics</div>
             <h1 className="g-header-title">서울 중구</h1>
             <p className="g-header-sub">도시 환경 분석 플랫폼</p>
+            {/* 패널 너비 토글 — 데스크톱에서만 노출 (CSS 로 모바일 숨김) */}
+            <button
+              type="button"
+              className={`g-width-toggle ${panelWide ? 'wide' : ''}`}
+              onClick={() => setPanelWide(w => !w)}
+              title={panelWide ? '패널 좁게' : '패널 넓게'}
+              aria-label="패널 너비 전환"
+            >
+              {panelWide ? '⇥' : '⇤'}
+            </button>
           </div>
 
-          {/* 뷰 토글 — 항상 고정 */}
-          {!loading && (
+          {/* 모드 토글 — 분석 ↔ 아티클 */}
+          {!loading && <ModeToggle mode={mode} onChange={setMode} />}
+
+          {/* 뷰 토글 — 분석 모드에서만 의미. 아티클 모드에선 숨김 */}
+          {!loading && mode === 'analysis' && (
             <div className="g-view-toggle-fixed">
               <button
                 className={`g-view-btn ${circleEnabled ? 'active' : ''}`}
@@ -525,7 +577,15 @@ export default function GisPage() {
 
           {loading && <div className="g-empty">데이터 로딩 중...</div>}
 
-          {!loading && !clickedPoint && circleEnabled && (
+          {/* 아티클 모드 */}
+          {!loading && mode === 'articles' && (
+            <ArticlePanel
+              selectedArticleId={selectedArticleId}
+              onSelectArticle={setSelectedArticleId}
+            />
+          )}
+
+          {!loading && mode === 'analysis' && !clickedPoint && circleEnabled && (
             <div className="g-empty">
               <div className="g-empty-icon">⊕</div>
               <p>지도에서 분석할 위치를<br />클릭하세요</p>
@@ -533,7 +593,7 @@ export default function GisPage() {
           )}
 
           {/* 전체 보기 + 건물 선택 → 건물 상세 카드 */}
-          {!loading && !circleEnabled && selectedBuilding && (
+          {!loading && mode === 'analysis' && !circleEnabled && selectedBuilding && (
             <BuildingDetailCard
               feature={selectedBuilding}
               zoningData={zoningData}
@@ -542,14 +602,14 @@ export default function GisPage() {
             />
           )}
 
-          {!loading && !circleEnabled && !selectedBuilding && (
+          {!loading && mode === 'analysis' && !circleEnabled && !selectedBuilding && (
             <div className="g-empty">
               <div className="g-empty-icon">⊕</div>
               <p>건물을 클릭하면<br />상세 정보를 확인할 수 있습니다</p>
             </div>
           )}
 
-          {!loading && clickedPoint && circleEnabled && (
+          {!loading && mode === 'analysis' && clickedPoint && circleEnabled && (
             <div className="g-sections">
 
               {/* ── Pedestrian Shed ── */}
@@ -728,7 +788,7 @@ export default function GisPage() {
         </aside>
 
         {/* 지도 */}
-        <div className={`g-map g-map-sheet-${mobileSheet}`}>
+        <div className={`g-map g-map-sheet-${mobileSheet} g-map-${mode} ${panelWide ? 'g-map-narrow' : ''}`}>
           <MapContainer
             center={CENTER}
             zoom={15}
@@ -801,6 +861,11 @@ export default function GisPage() {
 
             {visibleSection === 'heritage' && (
               <LandmarkLayer landmarks={filteredLandmarks} clickedPoint={clickedPoint} radius={radius} circleEnabled={circleEnabled} />
+            )}
+
+            {/* 아티클 모드 시각 자료 (1차 미사용; articleVisuals 등록 시 활성) */}
+            {mode === 'articles' && selectedArticleId != null && (
+              <ArticleMapOverlay articleId={selectedArticleId} />
             )}
           </MapContainer>
 
