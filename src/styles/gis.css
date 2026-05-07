@@ -1092,6 +1092,32 @@ html.gis-mode .hamburger span    { background: #555 !important; }
   font-weight: 600;
 }
 
+/* ─── Parks (녹지) Toggle ──────────────────────────────────── */
+.g-parks-toggle {
+  position: absolute;
+  top: 50px;
+  right: 12px;
+  z-index: 1000;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Noto Sans KR', sans-serif;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  transition: all 0.15s;
+  color: #888;
+}
+.g-parks-toggle:hover { background: #fff; color: #555; }
+.g-parks-toggle.active {
+  background: #66bb6a;
+  border-color: #4caf50;
+  color: #fff;
+  font-weight: 600;
+}
+
 /* ─── Historical Context ──────────────────────────────────── */
 .g-landmark-card {
   border: 1px solid #eee;
@@ -1260,6 +1286,12 @@ html.gis-mode .hamburger span    { background: #555 !important; }
   /* 답사 영역 버튼 */
   .g-survey-toggle {
     top: 8px;
+    right: 8px;
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+  .g-parks-toggle {
+    top: 38px;
     right: 8px;
     padding: 5px 10px;
     font-size: 11px;
