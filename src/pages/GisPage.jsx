@@ -33,10 +33,6 @@ import '../styles/gis-articles.css'
 const CENTER = [37.56530, 127.01676]
 const BOUNDS = [[37.53, 126.95], [37.60, 127.04]]
 
-// 전체 보기 모드의 LayerSelector 가 노출하는 시각화 5종.
-// 그 외(demo/commerce/pedshed/transit) 는 반경 의존이라 전체 보기에 부적합.
-const FULL_VIEW_LAYERS = ['intensity', 'figground', 'landuse', 'history', 'heritage']
-
 // ─── 편의시설 카테고리 ──────────────────────────────────────────
 const AMENITY_CATS = [
   { code: 'FD6', label: '음식점', icon: '🍽', color: '#e74c3c' },
@@ -639,7 +635,7 @@ export default function GisPage() {
           {!loading && mode === 'analysis' && !circleEnabled && (
             <>
               <LayerSelector
-                value={FULL_VIEW_LAYERS.includes(visibleSection) ? visibleSection : 'intensity'}
+                value={visibleSection}
                 onChange={setVisibleSection}
               />
               {selectedBuilding ? (
