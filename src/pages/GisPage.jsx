@@ -25,7 +25,12 @@ import 'leaflet/dist/leaflet.css'
 import '../styles/gis.css'
 import '../styles/gis-articles.css'
 
-const CENTER = [37.5636, 126.9976]
+// 답사 영역 중심 (src/gis/data/survey-area.json 폴리곤의 무게중심).
+// 이 값은 다음 5 곳에서 동시에 사용됨:
+//   - MapContainer 의 초기 center
+//   - PulseGuide 의 안내 위치 + 클릭 시 setClickedPoint
+//   - 초기 fetchBuildingsNearPoint / fetchZoningIntersect 의 좌표
+const CENTER = [37.56530, 127.01676]
 const BOUNDS = [[37.53, 126.95], [37.60, 127.04]]
 
 // 전체 보기 모드의 LayerSelector 가 노출하는 시각화 5종.
@@ -832,7 +837,7 @@ export default function GisPage() {
         <div className={`g-map g-map-sheet-${mobileSheet} g-map-${mode} ${panelWide ? 'g-map-narrow' : ''}`}>
           <MapContainer
             center={CENTER}
-            zoom={15}
+            zoom={16}
             minZoom={13}
             maxZoom={18}
             maxBounds={BOUNDS}
