@@ -1,0 +1,68 @@
+/* ============================================================
+   전체 보기 모드의 시각화 레이어 토글.
+   기존 gis.css 디자인 톤 (흑백, 0 border-radius, 작은 폰트) 따름.
+   ============================================================ */
+
+.g-layer-selector {
+  padding: 18px 24px 6px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.g-layer-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  color: #999;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.g-layer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.g-layer-btn {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  background: #fff;
+  border: 1px solid #eee;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.g-layer-btn:hover:not(.active) {
+  background: #f8f8f8;
+  border-color: #ddd;
+}
+.g-layer-btn.active {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+
+.g-layer-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: inherit;
+}
+.g-layer-btn.active .g-layer-label { color: #fff; }
+
+.g-layer-desc {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #aaa;
+}
+.g-layer-btn.active .g-layer-desc { color: #ddd; }
+
+@media (max-width: 768px) {
+  .g-layer-selector { padding: 14px 18px 4px; }
+}

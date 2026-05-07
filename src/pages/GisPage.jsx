@@ -15,16 +15,22 @@ import ModeToggle from '../components/gis/ModeToggle'
 import ArticlePanel from '../components/gis/ArticlePanel'
 import ArticleMapOverlay from '../components/gis/ArticleMapOverlay'
 import PulseGuide from '../components/gis/PulseGuide'
+import LayerSelector from '../components/gis/LayerSelector'
 import { fetchBuildingsNearPoint, getBuildingsMode } from '../data/buildings'
 import { fetchZoningIntersect, getZoningMode } from '../data/zoning'
 import landmarksData from '../gis/data/junggu-landmarks.json'
 import surveyAreaData from '../gis/data/survey-area.json'
+import parksData from '../gis/data/junggu-parks.json'
 import 'leaflet/dist/leaflet.css'
 import '../styles/gis.css'
 import '../styles/gis-articles.css'
 
 const CENTER = [37.5636, 126.9976]
 const BOUNDS = [[37.53, 126.95], [37.60, 127.04]]
+
+// 전체 보기 모드의 LayerSelector 가 노출하는 시각화 5종.
+// 그 외(demo/commerce/pedshed/transit) 는 반경 의존이라 전체 보기에 부적합.
+const FULL_VIEW_LAYERS = ['intensity', 'figground', 'landuse', 'history', 'heritage']
 
 // ─── 편의시설 카테고리 ──────────────────────────────────────────
 const AMENITY_CATS = [
@@ -198,6 +204,7 @@ export default function GisPage() {
   const [demoAgeFilter, setDemoAgeFilter] = useState(null) // null=전체, 'age_0_19' 등
   const [missingFilter, setMissingFilter] = useState(null) // null=용적률색상, 'vlRat','grndFlrCnt','platArea','totArea'
   const [showSurveyArea, setShowSurveyArea] = useState(false)
+  const [showParks, setShowParks] = useState(false)
   const [selectedBuilding, setSelectedBuilding] = useState(null)
   const [toast, setToast] = useState(null)
   const [mobileSheet, setMobileSheet] = useState(0) // 0=숨김, 1=작게, 2=크게
@@ -620,21 +627,27 @@ export default function GisPage() {
             </div>
           )}
 
-          {/* 전체 보기 + 건물 선택 → 건물 상세 카드 */}
-          {!loading && mode === 'analysis' && !circleEnabled && selectedBuilding && (
-            <BuildingDetailCard
-              feature={selectedBuilding}
-              zoningData={zoningData}
-              onClose={() => setSelectedBuilding(null)}
-              onOpenEum={() => openEum(selectedBuilding.properties.address)}
-            />
-          )}
-
-          {!loading && mode === 'analysis' && !circleEnabled && !selectedBuilding && (
-            <div className="g-empty">
-              <div className="g-empty-icon">⊕</div>
-              <p>건물을 클릭하면<br />상세 정보를 확인할 수 있습니다</p>
-            </div>
+          {/* 전체 보기 모드 — 시각화 토글 + (선택 건물 상세 / 안내) */}
+          {!loading && mode === 'analysis' && !circleEnabled && (
+            <>
+              <LayerSelector
+                value={FULL_VIEW_LAYERS.includes(visibleSection) ? visibleSection : 'intensity'}
+                onChange={setVisibleSection}
+              />
+              {selectedBuilding ? (
+                <BuildingDetailCard
+                  feature={selectedBuilding}
+                  zoningData={zoningData}
+                  onClose={() => setSelectedBuilding(null)}
+                  onOpenEum={() => openEum(selectedBuilding.properties.address)}
+                />
+              ) : (
+                <div className="g-empty">
+                  <div className="g-empty-icon">⊕</div>
+                  <p>건물을 클릭하면<br />상세 정보를 확인할 수 있습니다</p>
+                </div>
+              )}
+            </>
           )}
 
           {!loading && mode === 'analysis' && clickedPoint && circleEnabled && (
@@ -895,6 +908,10 @@ export default function GisPage() {
               <SurveyAreaLayer data={surveyAreaData} />
             )}
 
+            {showParks && (
+              <ParksLayer data={parksData} />
+            )}
+
             {visibleSection === 'heritage' && (
               <LandmarkLayer landmarks={filteredLandmarks} clickedPoint={clickedPoint} radius={radius} circleEnabled={circleEnabled} />
             )}
@@ -913,6 +930,14 @@ export default function GisPage() {
             title="답사 영역 표시"
           >
             답사 영역
+          </button>
+
+          <button
+            className={`g-parks-toggle ${showParks ? 'active' : ''}`}
+            onClick={() => setShowParks(v => !v)}
+            title="녹지(공원·정원·수목·초지) 표시"
+          >
+            녹지
           </button>
 
           <GisChatbot
@@ -2156,6 +2181,43 @@ function SurveyAreaLayer({ data }) {
       interactive: false,
     }).addTo(map)
     layer.bringToFront()
+    layerRef.current = layer
+    return () => { map.removeLayer(layer) }
+  }, [map, data])
+
+  return null
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  녹지 레이어 (OSM: leisure / landuse / natural)
+// ═══════════════════════════════════════════════════════════════
+function getParkFill(props) {
+  if (props.leisure === 'park' || props.leisure === 'recreation_ground' || props.leisure === 'nature_reserve') return '#66bb6a'
+  if (props.leisure === 'garden') return '#7cb342'
+  if (props.landuse === 'forest' || props.natural === 'wood') return '#2e7d32'
+  if (props.landuse === 'grass' || props.landuse === 'meadow' || props.landuse === 'village_green') return '#a5d6a7'
+  if (props.natural === 'grassland' || props.natural === 'scrub') return '#aed581'
+  if (props.landuse === 'cemetery') return '#9e9d24'
+  return '#81c784'
+}
+
+function ParksLayer({ data }) {
+  const map = useMap()
+  const layerRef = useRef(null)
+
+  useEffect(() => {
+    if (layerRef.current) map.removeLayer(layerRef.current)
+    const layer = L.geoJSON(data, {
+      style: f => ({
+        color: '#33691e',
+        weight: 0.4,
+        fillColor: getParkFill(f.properties || {}),
+        fillOpacity: 0.55,
+      }),
+      interactive: false,
+      smoothFactor: 1.5,
+    }).addTo(map)
+    layer.bringToBack()
     layerRef.current = layer
     return () => { map.removeLayer(layer) }
   }, [map, data])
