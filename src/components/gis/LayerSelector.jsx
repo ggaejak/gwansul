@@ -25,7 +25,8 @@ export default function LayerSelector({ value, onChange }) {
             <button
               type="button"
               className={`g-layer-btn ${value === l.code ? 'active' : ''}`}
-              onClick={() => onChange(l.code)}
+              // active 한 항목을 다시 누르면 'none' 으로 토글 (모든 시각화 끔)
+              onClick={() => onChange(value === l.code ? 'none' : l.code)}
               aria-pressed={value === l.code}
             >
               <span className="g-layer-label">{l.label}</span>

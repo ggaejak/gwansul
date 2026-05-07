@@ -459,7 +459,10 @@ export default function GisPage() {
     // 첫 진입(클릭 전 + 반경 분석 모드) — 색 분류를 모두 숨겨
     // 펄스 안내(PulseGuide)에 시선이 집중되게 한다.
     // 클릭하면 즉시 visibleSection 에 따른 색이 활성화됨.
-    if (circleEnabled && !clickedPoint) {
+    // 사용자가 LayerSelector 에서 active 항목을 다시 눌러 'none' 인 경우도
+    // 같은 처리 (시각화 모두 끔). ZoningLayer/LandmarkLayer 등 다른
+    // visibleSection 의존 레이어들은 자체 분기에서 자동으로 숨겨진다.
+    if (visibleSection === 'none' || (circleEnabled && !clickedPoint)) {
       return { fillColor: 'transparent', fillOpacity: 0, weight: 0, color: 'transparent' }
     }
 
