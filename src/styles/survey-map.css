@@ -1,0 +1,768 @@
+/* ============================================================
+   SurveyPage 의 지도 영역 스타일.
+   클래스 prefix: sv-* (survey 와 공유)
+   현재 위치 펄스, "내 위치로" 버튼, 토스트 정의.
+   ============================================================ */
+
+
+/* ─── 지도 컨테이너 ─────────────────────────────────────────── */
+.sv-map-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;          /* flex 자식이 부모 높이 초과하지 않도록 */
+  background: #f4f4f4;
+}
+.sv-map-shell .leaflet-container {
+  background: #f4f4f4;    /* 타일 로드 전 배경 */
+}
+
+
+/* ─── 현재 위치 펄스 마커 ───────────────────────────────────── */
+.sv-current-loc-icon {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+}
+.sv-loc-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #1976d2;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+.sv-loc-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(25, 118, 210, 0.45);
+  transform: translate(-50%, -50%);
+  animation: sv-loc-pulse 1.8s ease-out infinite;
+  z-index: 1;
+}
+@keyframes sv-loc-pulse {
+  0%   { transform: translate(-50%, -50%) scale(1);   opacity: 0.85; }
+  80%  { opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(3);   opacity: 0; }
+}
+
+
+/* ─── "내 위치로" 버튼 ──────────────────────────────────────── */
+/* Leaflet 의 zoom control 보다 위에 위치 (z-index: 401 = control pane) */
+.sv-locate-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  background: #fff;
+  border: 1px solid #ccc;
+  color: #555;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 1000;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  border-radius: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.sv-locate-btn:hover {
+  background: #f5f5f5;
+  border-color: #999;
+  color: #111;
+}
+.sv-locate-btn.active {
+  color: #1976d2;
+  border-color: #1976d2;
+}
+.sv-locate-btn.active:hover {
+  background: #e3f2fd;
+}
+.sv-locate-btn.disabled {
+  color: #bbb;
+  background: #fafafa;
+  cursor: not-allowed;
+}
+.sv-locate-btn.loading {
+  /* 미세한 펄스 — 로딩 표시 */
+  animation: sv-locate-loading 1.4s ease-in-out infinite;
+}
+@keyframes sv-locate-loading {
+  0%, 100% { opacity: 1;   }
+  50%      { opacity: 0.5; }
+}
+
+
+/* ─── 토스트 ────────────────────────────────────────────────── */
+.sv-toast {
+  position: absolute;
+  bottom: 72px;             /* zoom control(약 60px)과 겹치지 않게 */
+  left: 50%;
+  padding: 10px 18px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  z-index: 1100;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: calc(100% - 32px);
+  text-align: center;
+  animation: sv-toast-fade 4s ease-out forwards;
+  border-radius: 0;
+}
+@keyframes sv-toast-fade {
+  0%        { opacity: 0; transform: translate(-50%, 10px); }
+  10%, 80%  { opacity: 1; transform: translate(-50%, 0); }
+  100%      { opacity: 0; transform: translate(-50%, -4px); }
+}
+
+
+/* ─── 조사 마커 (status 색 + type 아이콘) ───────────────────── */
+.sv-marker-wrapper { background: transparent !important; border: none !important; }
+.sv-marker {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+.sv-marker:hover { transform: scale(1.1); }
+.sv-marker-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* ─── 상세 시트 ─────────────────────────────────────────────── */
+.sv-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 1500;
+  animation: sv-backdrop-fade 0.18s ease-out;
+}
+@keyframes sv-backdrop-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sv-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1600;
+  background: #fff;
+  border-top: 1px solid #e0e0e0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  max-height: 80dvh;
+  animation: sv-sheet-up 0.22s ease-out;
+}
+@keyframes sv-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0);     }
+}
+
+.sv-sheet-handle {
+  width: 38px;
+  height: 4px;
+  background: #ddd;
+  border-radius: 2px;
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+
+.sv-sheet-header {
+  padding: 12px 20px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+.sv-sheet-title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.sv-sheet-type {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111;
+}
+.sv-sheet-status {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 0;
+  white-space: nowrap;
+}
+.sv-status-pending  { background: #fff7d1; color: #8a6300; border: 1px solid #f0d36b; }
+.sv-status-approved { background: #ddefe0; color: #1f6f3a; border: 1px solid #94c8a3; }
+.sv-status-rejected { background: #f0f0f0; color: #555;    border: 1px solid #ccc; }
+
+.sv-sheet-meta {
+  font-size: 11px;
+  color: #888;
+  letter-spacing: 0.02em;
+}
+
+.sv-sheet-body {
+  padding: 14px 20px 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sv-sheet-photos {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.sv-sheet-photo {
+  flex-shrink: 0;
+  display: block;
+  width: 110px;
+  height: 110px;
+  border: 1px solid #e0e0e0;
+  background: #fafafa;
+  overflow: hidden;
+}
+.sv-sheet-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.sv-sheet-fields {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sv-sheet-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+.sv-sheet-row dt {
+  font-size: 11px;
+  color: #999;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.sv-sheet-row dd {
+  margin: 0;
+  font-size: 14px;
+  color: #111;
+}
+.sv-sheet-row-aux {
+  padding-top: 6px;
+  border-top: 1px solid #f5f5f5;
+}
+.sv-sheet-row-aux dt { font-size: 10px; }
+.sv-sheet-row-aux dd { font-size: 12px; color: #666; }
+.sv-sheet-coords {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.sv-sheet-memo,
+.sv-sheet-reject {
+  border-top: 1px solid #f5f5f5;
+  padding-top: 10px;
+}
+.sv-sheet-memo-label {
+  font-size: 11px;
+  color: #999;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.sv-sheet-memo p,
+.sv-sheet-reject p {
+  margin: 0;
+  font-size: 13px;
+  color: #333;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.sv-sheet-reject p { color: #8a3a3a; }
+
+.sv-sheet-footer {
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid #f0f0f0;
+  flex-shrink: 0;
+  background: #fff;
+}
+.sv-btn-primary,
+.sv-btn-secondary {
+  flex: 1;
+  height: 44px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.sv-btn-primary {
+  background: #111;
+  border-color: #111;
+  color: #fff;
+}
+.sv-btn-primary:hover { background: #000; }
+.sv-btn-secondary {
+  background: #fff;
+  border-color: #ccc;
+  color: #555;
+}
+.sv-btn-secondary:hover {
+  background: #f5f5f5;
+  border-color: #999;
+  color: #111;
+}
+
+
+/* ─── 입력 / 수정 폼 ────────────────────────────────────────── */
+.sv-form-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1700;
+  animation: sv-backdrop-fade 0.18s ease-out;
+}
+
+.sv-form-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1800;
+  background: #fff;
+  border-top: 1px solid #e0e0e0;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.16);
+  display: flex;
+  flex-direction: column;
+  height: 92vh;
+  height: 92dvh;            /* 폼 높이 — 모바일 키보드 띄울 자리도 고려해 92% 한계 */
+  animation: sv-sheet-up 0.22s ease-out;
+}
+
+.sv-form-header {
+  padding: 4px 18px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+.sv-form-title-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sv-form-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.sv-form-close {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: #888;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 0;
+}
+.sv-form-close:hover { color: #111; }
+
+.sv-form-building {
+  font-size: 12px;
+  color: #666;
+  margin-top: 6px;
+  letter-spacing: 0.02em;
+}
+
+.sv-form-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.sv-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sv-form-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #777;
+  text-transform: uppercase;
+}
+.sv-form-label-aux {
+  margin-left: auto;
+  font-size: 11px;
+  color: #aaa;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.sv-required { color: #c00; font-weight: 700; }
+
+.sv-form-select,
+.sv-form-textarea,
+.sv-form-input {
+  width: 100%;
+  font-size: 16px;            /* iOS 줌 방지 */
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #111;
+  padding: 0 12px;
+  outline: none;
+  font-family: inherit;
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.12s;
+}
+.sv-form-select { height: 44px; padding-right: 32px; background-image: linear-gradient(45deg, transparent 50%, #888 50%), linear-gradient(135deg, #888 50%, transparent 50%); background-position: calc(100% - 16px) 18px, calc(100% - 11px) 18px; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+.sv-form-input { height: 44px; }
+.sv-form-input[type="number"] {
+  /* number input 의 spin button — 모바일 키패드 우선이라 숨김 */
+  -moz-appearance: textfield;
+}
+.sv-form-input[type="number"]::-webkit-outer-spin-button,
+.sv-form-input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.sv-form-textarea { padding: 10px 12px; line-height: 1.5; resize: vertical; min-height: 72px; }
+.sv-form-select:focus,
+.sv-form-textarea:focus,
+.sv-form-input:focus { border-color: #111; }
+
+.sv-form-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #111;
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 0;
+}
+.sv-form-check input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #111;
+}
+
+.sv-form-coords {
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  color: #666;
+  background: #f7f7f7;
+  border: 1px solid #eee;
+  padding: 8px 10px;
+}
+
+
+/* ─── 다중 선택 chips (1층 업종 등) ─────────────────────────── */
+.sv-form-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sv-chip {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #555;
+  cursor: pointer;
+  border-radius: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  white-space: nowrap;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+}
+.sv-chip:hover { background: #f5f5f5; border-color: #999; color: #111; }
+.sv-chip.active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.sv-chip.active:hover { background: #000; }
+
+
+/* ─── 사진 그리드 ───────────────────────────────────────────── */
+.sv-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+}
+.sv-photo-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: #f0f0f0;
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+}
+.sv-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.sv-photo-new::after {
+  content: 'NEW';
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(25, 118, 210, 0.9);
+  padding: 2px 5px;
+  letter-spacing: 0.05em;
+}
+.sv-photo-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border: none;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.sv-photo-remove:hover { background: rgba(0, 0, 0, 0.85); }
+
+.sv-photo-add {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: #fff;
+  border: 1px dashed #bbb;
+  cursor: pointer;
+  color: #666;
+  font-size: 22px;
+  border-radius: 0;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.sv-photo-add:hover {
+  background: #f5f5f5;
+  border-color: #111;
+  color: #111;
+}
+.sv-photo-add small {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+
+
+/* ─── 폼 푸터 ────────────────────────────────────────────────── */
+.sv-form-footer {
+  flex-shrink: 0;
+  padding: 10px 18px 16px;
+  border-top: 1px solid #f0f0f0;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sv-form-error {
+  margin: 0;
+  font-size: 12px;
+  color: #c00;
+}
+.sv-form-hint {
+  margin: 0;
+  font-size: 11px;
+  color: #aaa;
+  letter-spacing: 0.02em;
+}
+.sv-form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+
+/* ─── 조사 유형 선택 picker ──────────────────────────────────── */
+.sv-pick-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.40);
+  z-index: 1700;
+  animation: sv-backdrop-fade 0.18s ease-out;
+}
+
+.sv-pick-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1800;
+  background: #fff;
+  border-top: 1px solid #e0e0e0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.14);
+  display: flex;
+  flex-direction: column;
+  animation: sv-sheet-up 0.22s ease-out;
+}
+
+.sv-pick-header {
+  padding: 4px 18px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.sv-pick-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.sv-pick-coords {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #888;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-pick-options {
+  padding: 16px 18px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sv-pick-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #ddd;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  border-radius: 0;
+  transition: background 0.12s, border-color 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.sv-pick-btn:hover,
+.sv-pick-btn:active {
+  background: #f7f7f7;
+  border-color: #111;
+}
+.sv-pick-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.sv-pick-icon-building { background: #5a6068; }     /* type-only — picker 단계에서 status 색 적용 안 됨 */
+.sv-pick-icon-road     { background: #5a6068; }
+.sv-pick-icon-point    { background: #5a6068; }
+.sv-pick-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sv-pick-text strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111;
+}
+.sv-pick-text small {
+  font-size: 11px;
+  color: #888;
+  letter-spacing: 0.02em;
+}
+
+.sv-pick-footer {
+  padding: 12px 18px 16px;
+  display: flex;
+}
+.sv-pick-footer .sv-btn-secondary {
+  flex: 1;
+  height: 44px;
+}
+
+
+/* ─── 모바일 미세 조정 ──────────────────────────────────────── */
+@media (max-width: 480px) {
+  .sv-locate-btn { width: 44px; height: 44px; top: 10px; right: 10px; }
+  .sv-toast      { bottom: 80px; font-size: 12px; padding: 8px 14px; }
+  .sv-sheet-row  { grid-template-columns: 72px 1fr; }
+  .sv-sheet-photo { width: 96px; height: 96px; }
+  .sv-photos     { grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); }
+}

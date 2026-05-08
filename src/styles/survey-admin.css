@@ -1,0 +1,79 @@
+/* ============================================================
+   SurveyAdminPage — 관리자 페이지 스타일.
+   클래스 prefix: sa-* (survey admin)
+   PC 우선 — 좌우 분할 레이아웃 (Step C2 에서 본격 활용).
+   로그인 게이트는 SurveyPage 와 공유 (sv-* 재사용).
+   ============================================================ */
+
+.sa-page {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #fafafa;
+  color: #111;
+  overflow: hidden;
+}
+
+.sa-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 28px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fff;
+  flex-shrink: 0;
+}
+.sa-header-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 4px 0 0;
+}
+.sa-header small {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  color: #999;
+  text-transform: uppercase;
+}
+
+.sa-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 28px;
+  overflow-y: auto;
+}
+
+.sa-placeholder {
+  text-align: center;
+  max-width: 440px;
+}
+.sa-placeholder-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  color: #aaa;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.sa-placeholder-title {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 10px;
+  letter-spacing: -0.01em;
+}
+.sa-placeholder-desc {
+  font-size: 13px;
+  color: #777;
+  line-height: 1.7;
+  margin: 0;
+}
+
+
+@media (max-width: 768px) {
+  .sa-header { padding: 14px 18px; }
+  .sa-body   { padding: 40px 20px; }
+}
