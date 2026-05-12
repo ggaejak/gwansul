@@ -1,11 +1,12 @@
 // 조사 마커 클릭 시 표시되는 하단 시트.
 //
 // props:
-//   feature : GeoJSON Feature (camelCase properties) | null
-//   onClose : () => void
-//   onEdit  : (feature) => void   — pending 일 때만 호출 가능 (B4 에서 폼 연결)
+//   feature  : GeoJSON Feature (camelCase properties) | null
+//   onClose  : () => void
+//   onEdit   : (feature) => void   — pending 일 때만 호출 가능
+//   onDelete : (feature) => Promise<void>  — pending 일 때만 호출. 부모가 confirm + delete + refresh.
 //
-// pending 상태가 아니면 [수정] 버튼 숨김 (열람만).
+// pending 상태가 아니면 [수정] / [삭제] 버튼 숨김 (열람만).
 // 사진은 photoPaths → getPhotoUrl 로 public URL 변환 (Storage public bucket 가정).
 
 import { getPhotoUrl } from '../../data/surveys'
@@ -38,7 +39,7 @@ function formatLatLng(geometry) {
   return `${c[1].toFixed(6)}, ${c[0].toFixed(6)}`
 }
 
-export default function SurveyDetailSheet({ feature, onClose, onEdit }) {
+export default function SurveyDetailSheet({ feature, onClose, onEdit, onDelete }) {
   if (!feature) return null
 
   const p = feature.properties || {}
@@ -129,14 +130,25 @@ export default function SurveyDetailSheet({ feature, onClose, onEdit }) {
         </div>
 
         <footer className="sv-sheet-footer">
-          <button type="button" className="sv-btn-secondary" onClick={onClose}>
-            닫기
-          </button>
-          {isEditable && (
-            <button type="button" className="sv-btn-primary" onClick={() => onEdit(feature)}>
-              수정
+          {isEditable && onDelete && (
+            <button
+              type="button"
+              className="sv-btn-danger-ghost"
+              onClick={() => onDelete(feature)}
+            >
+              삭제
             </button>
           )}
+          <div className="sv-sheet-footer-right">
+            <button type="button" className="sv-btn-secondary" onClick={onClose}>
+              닫기
+            </button>
+            {isEditable && (
+              <button type="button" className="sv-btn-primary" onClick={() => onEdit(feature)}>
+                수정
+              </button>
+            )}
+          </div>
         </footer>
       </div>
     </>

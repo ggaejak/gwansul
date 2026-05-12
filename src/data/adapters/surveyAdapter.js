@@ -19,33 +19,38 @@ function pointToLngLat(geo) {
 }
 
 /**
- * survey_buildings_in_area() RPC 행 → GeoJSON Feature.
+ * survey_buildings_in_area() JSONB FeatureCollection → camelCase 정규화.
  *
- * Feature.properties 에 조사 통계 동봉 → SurveyPage 의 styling 에서
- * `feature.properties.surveyCount > 0` 같이 분기 가능.
+ * 00016 마이그레이션 이후 RPC 는 단일 JSONB FeatureCollection 을 반환한다
+ * (PostgREST max_rows 1,000 cap 회피). 이 함수가 properties 를 camelCase 로
+ * 통일해 다른 어댑터(surveysFeatureCollectionFromRpc) 와 일관성을 맞춘다.
+ *
+ * SurveyMap 의 styling 에서 `feature.properties.surveyCount > 0` 등으로 사용.
  */
-export function dbRowToBuildingFeature(row) {
-  const geometry = typeof row.geom === 'string' ? JSON.parse(row.geom) : row.geom
+function normalizeBuildingFeature(feat) {
+  if (!feat) return null
+  const p = feat.properties || {}
   return {
     type: 'Feature',
-    geometry,
+    geometry: feat.geometry,
     properties: {
-      id:             row.id,
-      pnu:            row.pnu,
-      bldNm:          row.bld_nm,
-      mainPurps:      row.main_purps,
-      vlRat:          row.vl_rat,
-      surveyCount:    Number(row.survey_count) || 0,
-      approvedCount:  Number(row.approved_count) || 0,
-      hasCurated:     row.has_curated === true,
+      id:            p.id,
+      pnu:           p.pnu,
+      bldNm:         p.bld_nm,
+      mainPurps:     p.main_purps,
+      vlRat:         p.vl_rat,
+      surveyCount:   Number(p.survey_count) || 0,
+      approvedCount: Number(p.approved_count) || 0,
+      hasCurated:    p.has_curated === true,
     },
   }
 }
 
-export function dbRowsToBuildingFeatureCollection(rows) {
+export function buildingsFeatureCollectionFromRpc(fc) {
+  if (!fc?.features) return { type: 'FeatureCollection', features: [] }
   return {
     type: 'FeatureCollection',
-    features: (rows || []).map(dbRowToBuildingFeature),
+    features: fc.features.map(normalizeBuildingFeature).filter(Boolean),
   }
 }
 

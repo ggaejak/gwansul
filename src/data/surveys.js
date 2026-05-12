@@ -8,14 +8,19 @@
 //
 // 함수 분류:
 //   [Read]   fetchBuildingsInSurveyArea, fetchSurveysInArea, fetchSurveyById,
-//            fetchPendingSurveys, fetchSurveyProgress
+//            fetchPendingSurveys, fetchSurveyProgress, fetchRelatedSurveys
 //   [Write]  generateSurveyId, makePhotoPath, uploadSurveyPhoto,
 //            saveSurvey (INSERT), updateSurvey (UPDATE — pending only)
+//   [Review] approveSurvey (type 분기 wrapper), rejectSurvey
+//            — admin_* SECURITY DEFINER RPC 호출, 비밀번호 평문 전달.
+//   [Delete] deleteSurvey (조사원 — pending only, RLS 가 차단),
+//            adminDeleteSurvey (관리자 — 모든 상태, RPC + 비밀번호)
+//            — 두 함수 모두 Storage 의 사진 파일을 best-effort 로 함께 삭제.
 //   [Helper] getPhotoUrl, isSurveyBackendReady
 
 import { supabase, isSupabaseReady } from '../lib/supabase'
 import {
-  dbRowsToBuildingFeatureCollection,
+  buildingsFeatureCollectionFromRpc,
   dbRowToPendingSurvey,
   surveyToInsertRow,
   surveysFeatureCollectionFromRpc,
@@ -25,13 +30,16 @@ import {
 const PHOTO_BUCKET = 'survey-photos'
 const EMPTY_FC = { type: 'FeatureCollection', features: [] }
 const EMPTY_PROGRESS = {
-  in_area_total:      0,
-  surveyed_buildings: 0,
-  approved_buildings: 0,
-  pending_total:      0,
-  approved_total:     0,
-  rejected_total:     0,
-  by_day:             [],
+  in_area_total:        0,
+  surveyed_buildings:   0,
+  approved_buildings:   0,
+  pending_total:        0,
+  approved_total:       0,
+  rejected_total:       0,
+  curated_roads_total:  0,
+  curated_points_total: 0,
+  pending_by_type:      { building: 0, road: 0, point: 0 },
+  by_day:               [],
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -58,6 +66,9 @@ function ensureReady(fnName) {
  * 신당동 영역 내 건물 + 각 건물의 조사 통계.
  * SurveyPage 지도 렌더링용. 빈 상태에서도 정상 호출돼야 함 (빈 features).
  *
+ * 00016 마이그레이션 이후 RPC 는 JSONB FeatureCollection 을 반환한다
+ * (PostgREST max_rows 1,000 cap 회피).
+ *
  * Supabase 미초기화 시 빈 FeatureCollection + 콘솔 경고.
  */
 export async function fetchBuildingsInSurveyArea() {
@@ -70,7 +81,7 @@ export async function fetchBuildingsInSurveyArea() {
     console.warn('[surveys.fetchBuildingsInSurveyArea] RPC 실패:', error.message)
     return EMPTY_FC
   }
-  return dbRowsToBuildingFeatureCollection(data)
+  return buildingsFeatureCollectionFromRpc(data)
 }
 
 /**
@@ -149,6 +160,69 @@ export async function fetchSurveyById(surveyId) {
     return null
   }
   return surveyFeatureFromRpc(data)
+}
+
+/**
+ * 같은 건물에 들어온 다른 조사 기록.
+ * SurveyAdminPage 의 상세 패널에서 "같은 건물의 다른 조사" 섹션용.
+ *
+ * building_id 또는 building_pnu 둘 중 하나라도 일치하면 매칭.
+ * 좌표만 있는 조사는 매칭 불가 (key 가 없음) → 빈 배열.
+ *
+ * 00011 마이그레이션 이후 anon 도 SELECT 가능 → RPC 없이 직접 쿼리.
+ * location 컬럼은 PostgREST 가 EWKB hex 로 직렬화하므로 SELECT 에서 제외
+ * (이 함수는 메타데이터/payload/photoPaths 만 필요).
+ *
+ * @param {object} opts
+ * @param {number|null} [opts.buildingId]
+ * @param {string|null} [opts.buildingPnu]
+ * @param {string|null} [opts.excludeId]   현재 선택된 survey 제외
+ * @param {number}      [opts.limit=20]
+ * @returns {Promise<object[]>}
+ */
+export async function fetchRelatedSurveys({
+  buildingId = null,
+  buildingPnu = null,
+  excludeId = null,
+  limit = 20,
+} = {}) {
+  if (!isSupabaseReady()) {
+    console.warn('[surveys.fetchRelatedSurveys] Supabase 미초기화 — 빈 결과 반환')
+    return []
+  }
+  if (buildingId == null && !buildingPnu) return []
+
+  const orFilters = []
+  if (buildingId != null) orFilters.push(`building_id.eq.${buildingId}`)
+  if (buildingPnu)        orFilters.push(`building_pnu.eq.${buildingPnu}`)
+
+  let q = supabase
+    .from('field_surveys')
+    .select('id, survey_type, status, created_at, updated_at, payload, memo, photo_paths, building_id, building_pnu, reject_reason')
+    .or(orFilters.join(','))
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (excludeId) q = q.neq('id', excludeId)
+
+  const { data, error } = await q
+  if (error) {
+    console.warn('[surveys.fetchRelatedSurveys] 실패:', error.message)
+    return []
+  }
+  return (data || []).map(r => ({
+    id:           r.id,
+    surveyType:   r.survey_type,
+    status:       r.status,
+    createdAt:    r.created_at,
+    updatedAt:    r.updated_at,
+    payload:      r.payload || {},
+    memo:         r.memo,
+    photoPaths:   r.photo_paths || [],
+    buildingId:   r.building_id,
+    buildingPnu:  r.building_pnu,
+    rejectReason: r.reject_reason,
+  }))
 }
 
 /**
@@ -272,6 +346,194 @@ export async function saveSurvey(survey) {
  * @param {string|null} [patch.memo]
  * @returns {Promise<{id: string}>}
  */
+// ─────────────────────────────────────────────────────────────
+// REVIEW — Admin 승인/반려 (SECURITY DEFINER RPC + 비밀번호 게이트)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 조사 승인 + curated_* 저장.
+ *
+ * survey_type 별로 다른 RPC 를 호출. 호출자는 type 에 맞는 curated 필드만 채워서 전달.
+ *
+ * @param {object} args
+ * @param {string} args.surveyId
+ * @param {('building'|'road'|'point')} args.surveyType
+ * @param {string} args.password                 ADMIN_PASSWORD (src/lib/adminAuth)
+ * @param {object} args.curated                  type 별 정제 필드
+ *   - building: { firstFloorUse: string|null, isVacant: boolean|null, adminMemo: string|null }
+ *   - road    : { nightBrightness: string|null, roadWidth: string|null, adminMemo: string|null }
+ *   - point   : { category: string (required), adminMemo: string|null }
+ * @returns {Promise<{curatedId: number}>}
+ */
+export async function approveSurvey({ surveyId, surveyType, password, curated = {} }) {
+  ensureReady('approveSurvey')
+  if (!surveyId)   throw new Error('approveSurvey: surveyId 필수')
+  if (!surveyType) throw new Error('approveSurvey: surveyType 필수')
+  if (!password)   throw new Error('approveSurvey: password 필수')
+
+  let rpcName, params
+  if (surveyType === 'building') {
+    rpcName = 'admin_approve_survey_building'
+    params = {
+      p_password:        password,
+      p_id:              surveyId,
+      p_first_floor_use: curated.firstFloorUse ?? null,
+      p_is_vacant:       curated.isVacant ?? null,
+      p_admin_memo:      curated.adminMemo ?? null,
+    }
+  } else if (surveyType === 'road') {
+    rpcName = 'admin_approve_survey_road'
+    params = {
+      p_password:         password,
+      p_id:               surveyId,
+      p_night_brightness: curated.nightBrightness ?? null,
+      p_road_width:       curated.roadWidth ?? null,
+      p_admin_memo:       curated.adminMemo ?? null,
+    }
+  } else if (surveyType === 'point') {
+    rpcName = 'admin_approve_survey_point'
+    if (!curated.category) {
+      throw new Error('approveSurvey(point): category 필수')
+    }
+    params = {
+      p_password:   password,
+      p_id:         surveyId,
+      p_category:   curated.category,
+      p_admin_memo: curated.adminMemo ?? null,
+    }
+  } else {
+    throw new Error(`approveSurvey: 알 수 없는 surveyType ${surveyType}`)
+  }
+
+  const { data, error } = await supabase.rpc(rpcName, params)
+  if (error) {
+    // Supabase 는 RPC 의 RAISE EXCEPTION 메시지를 error.message 에 그대로 담아 줌.
+    throw new Error(error.message || '승인 처리 실패')
+  }
+  return { curatedId: data }
+}
+
+/**
+ * 조사 반려.
+ *
+ * @param {object} args
+ * @param {string} args.surveyId
+ * @param {string} args.reason     필수 (공백 trim 후 비면 RPC 가 에러).
+ * @param {string} args.password   ADMIN_PASSWORD
+ */
+export async function rejectSurvey({ surveyId, reason, password }) {
+  ensureReady('rejectSurvey')
+  if (!surveyId) throw new Error('rejectSurvey: surveyId 필수')
+  if (!reason || !reason.trim()) throw new Error('rejectSurvey: reason 필수')
+  if (!password) throw new Error('rejectSurvey: password 필수')
+
+  const { error } = await supabase.rpc('admin_reject_survey', {
+    p_password: password,
+    p_id:       surveyId,
+    p_reason:   reason.trim(),
+  })
+  if (error) {
+    throw new Error(error.message || '반려 처리 실패')
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// DELETE — 조사원/관리자 (Storage 사진 best-effort 동반 삭제)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Storage 의 사진 파일을 묶어서 best-effort 로 삭제.
+ * 실패해도 DB 삭제 흐름은 진행 (콘솔 경고만).
+ */
+async function removePhotosBestEffort(photoPaths) {
+  if (!photoPaths || photoPaths.length === 0) return
+  try {
+    const { error } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .remove(photoPaths)
+    if (error) {
+      console.warn('[surveys.removePhotosBestEffort] Storage 삭제 실패 (DB 삭제는 진행):', error.message)
+    }
+  } catch (e) {
+    console.warn('[surveys.removePhotosBestEffort] Storage 삭제 예외:', e?.message)
+  }
+}
+
+/**
+ * 조사원 셀프 삭제 — status='pending' row 만 가능.
+ *
+ * RLS(00019) 가 status='pending' 일 때만 anon DELETE 를 허용.
+ * 다른 상태는 RLS 가 0 row 영향으로 차단 → 에러 throw.
+ *
+ * curated_* 정리는 AFTER DELETE 트리거가 자동 처리하지만,
+ * pending row 는 보통 curated 에 포함되지 않음 (curated 는 승인 시 생성).
+ *
+ * Storage 사진은 호출 측이 photoPaths 를 알고 있으므로 함께 전달.
+ *
+ * @param {object} args
+ * @param {string} args.surveyId
+ * @param {string[]} [args.photoPaths]
+ */
+export async function deleteSurvey({ surveyId, photoPaths = [] } = {}) {
+  ensureReady('deleteSurvey')
+  if (!surveyId) throw new Error('deleteSurvey: surveyId 필수')
+
+  // 1) Storage 사진 먼저 (best-effort)
+  await removePhotosBestEffort(photoPaths)
+
+  // 2) DB row 삭제 (RLS 가 pending 만 통과)
+  const { data, error } = await supabase
+    .from('field_surveys')
+    .delete()
+    .eq('id', surveyId)
+    .select('id')
+
+  if (error) {
+    throw new Error(`조사 삭제 실패: ${error.message}`)
+  }
+  if (!data || data.length === 0) {
+    // RLS 차단 또는 id 오류 — 어느 쪽이든 사용자에게 명확히 알림
+    throw new Error('삭제 대상 없음 — 이미 검토 완료된 조사이거나 id 가 잘못되었습니다')
+  }
+  return { id: surveyId }
+}
+
+/**
+ * 관리자 삭제 — 모든 상태 가능. SECURITY DEFINER RPC + 비밀번호.
+ *
+ * RPC 가 photo_paths 를 반환 → 그 경로로 Storage 정리.
+ * curated_* 정리는 트리거가 자동 처리.
+ *
+ * @param {object} args
+ * @param {string} args.surveyId
+ * @param {string} args.password    ADMIN_PASSWORD
+ * @returns {Promise<{deletedSurveyId: string, photoPaths: string[], curatedCleaned: boolean}>}
+ */
+export async function adminDeleteSurvey({ surveyId, password }) {
+  ensureReady('adminDeleteSurvey')
+  if (!surveyId) throw new Error('adminDeleteSurvey: surveyId 필수')
+  if (!password) throw new Error('adminDeleteSurvey: password 필수')
+
+  const { data, error } = await supabase.rpc('admin_delete_survey', {
+    p_password: password,
+    p_id:       surveyId,
+  })
+  if (error) {
+    throw new Error(error.message || '관리자 삭제 실패')
+  }
+  const result = data || {}
+  const photoPaths = Array.isArray(result.photo_paths) ? result.photo_paths : []
+
+  // Storage 정리 (best-effort)
+  await removePhotosBestEffort(photoPaths)
+
+  return {
+    deletedSurveyId: result.deleted_survey_id,
+    photoPaths,
+    curatedCleaned:  result.curated_cleaned === true,
+  }
+}
+
 export async function updateSurvey(surveyId, { payload, photoPaths, memo } = {}) {
   ensureReady('updateSurvey')
   if (!surveyId) throw new Error('updateSurvey: surveyId 필수')

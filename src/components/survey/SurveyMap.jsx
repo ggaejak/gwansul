@@ -3,19 +3,26 @@
 // Step B2: 신당동 경계(점선) + 위치 펄스 + "내 위치로" 버튼
 // Step B3: 모든 조사 마커 (status 색 / type 아이콘) + 상세 시트
 // Step B4: 마커 [수정] → prefill 폼 / 사진 압축·업로드 / save·update
-// Step B5: 빈 곳 탭 → TypeSelectPicker (당시 road / point)
-// 좌표 우선 모드 전환 (00013 마이그레이션 이후):
-//   - 건물 폴리곤 GeoJSON 레이어 제거 (회색/노랑/초록 채색 사라짐)
-//   - 어느 점이든 클릭 → picker (건물 / 도로 / 점 3 종)
-//   - 건물 조사도 자유 좌표 — building_id / building_pnu NULL 허용
-//   - admin 정제 시 좌표/사진으로 매핑 (Phase C 의 책임)
+// Step B5: 빈 곳 탭 → TypeSelectPicker
+// 좌표 우선 모드(00013 이후) + 건물 시각 레이어 제거(C 보강 이후):
+//   - 어느 점 클릭이든 → picker (건물/도로/점 3 종)
+//   - 건물 폴리곤은 지도에 렌더링하지 않음 (시각 단순화)
+//   - 다만 buildings state 는 백그라운드 유지:
+//     클릭 좌표가 어떤 건물 폴리곤 안에 있는지 turf.booleanPointInPolygon 으로 판정,
+//     매칭 시 해당 건물의 {id, pnu, bldNm} 을 폼에 자동 prefill
+//   - 매칭 실패 시 building_id/pnu 없이 좌표만으로 저장 (좌표 우선 원칙 유지)
 
 import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, GeoJSON, ZoomControl, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
+import { booleanPointInPolygon, point as turfPoint } from '@turf/turf'
 
 import sindangArea from '../../gis/data/sindang-survey-area.json'
-import { fetchSurveysInArea } from '../../data/surveys'
+import {
+  fetchSurveysInArea,
+  fetchBuildingsInSurveyArea,
+  deleteSurvey,
+} from '../../data/surveys'
 import { useCurrentLocation } from '../../hooks/useCurrentLocation'
 import CurrentLocationMarker from './CurrentLocationMarker'
 import LocateButton from './LocateButton'
@@ -75,17 +82,42 @@ function MapClickHandler({ onClick }) {
   return null
 }
 
+// 답사 영역 외곽 — VWorld 짙은 타일과 구분되도록 보라색 점선.
 const AREA_STYLE = {
-  color:       '#111',
-  weight:      2,
-  opacity:     0.7,
+  color:       '#7c3aed',
+  weight:      3,
+  opacity:     0.9,
   fillOpacity: 0,
-  dashArray:   '6 4',
+  dashArray:   '8 6',
+}
+
+// 좌표가 buildings.features 중 어떤 폴리곤 안에 있는지 판정.
+// 첫 매칭 feature 의 properties 를 반환 (없으면 null).
+// 6,447 폴리곤 × ray-casting 은 1 click 당 수 ms 수준이라 캐싱 불필요.
+function findBuildingAt(buildings, lng, lat) {
+  if (!buildings?.features?.length) return null
+  let pt
+  try {
+    pt = turfPoint([lng, lat])
+  } catch {
+    return null
+  }
+  for (const f of buildings.features) {
+    const t = f?.geometry?.type
+    if (t !== 'Polygon' && t !== 'MultiPolygon') continue
+    try {
+      if (booleanPointInPolygon(pt, f)) return f
+    } catch {
+      // 잘못된 geometry 는 건너뜀
+    }
+  }
+  return null
 }
 
 
 export default function SurveyMap() {
   const [surveys,   setSurveys]   = useState(null)
+  const [buildings, setBuildings] = useState(null)   // 신당동 영역 내 건물 + 조사 통계
   const [selected,  setSelected]  = useState(null)   // 마커 클릭 → 상세 시트
   const [formState, setFormState] = useState(null)   // 입력/수정 폼 상태
   const [pickerState, setPickerState] = useState(null) // 빈 곳 탭 → 유형 선택
@@ -95,16 +127,24 @@ export default function SurveyMap() {
   const { position, accuracy, status, error: geoError } = useCurrentLocation()
 
   async function refreshSurveys() {
-    const srv = await fetchSurveysInArea()
+    // 조사 데이터가 갱신되면 건물 통계(survey_count 등)도 새로 가져옴.
+    const [srv, bld] = await Promise.all([
+      fetchSurveysInArea(),
+      fetchBuildingsInSurveyArea(),
+    ])
     setSurveys(srv)
+    setBuildings(bld)
   }
 
-  // 모든 조사 fetch (마운트 시 1 회).
+  // 마운트 시 1 회 — 조사 + 건물 병렬 fetch.
   useEffect(() => {
     let cancelled = false
-    fetchSurveysInArea().then(srv => {
-      if (!cancelled) setSurveys(srv)
-    })
+    Promise.all([fetchSurveysInArea(), fetchBuildingsInSurveyArea()])
+      .then(([srv, bld]) => {
+        if (cancelled) return
+        setSurveys(srv)
+        setBuildings(bld)
+      })
     return () => { cancelled = true }
   }, [])
 
@@ -146,10 +186,11 @@ export default function SurveyMap() {
         />
         <ZoomControl position="bottomright" />
 
-        {/* 신당동 영역 외곽 (점선) */}
+        {/* 신당동 영역 외곽 (보라 점선) */}
         <GeoJSON data={sindangArea} style={AREA_STYLE} interactive={false} />
 
         {/* 어느 점 클릭이든 → 유형 선택 picker (좌표 우선 모드) */}
+        {/* 클릭 좌표가 어떤 건물 폴리곤 안에 있으면 그 건물 정보도 같이 픽업 */}
         <MapClickHandler
           onClick={(e) => {
             // 다른 시트/폼/picker 가 열린 동안은 무시
@@ -159,7 +200,19 @@ export default function SurveyMap() {
               showToast('신당동 영역 안에서만 조사 가능합니다')
               return
             }
-            setPickerState({ location: { lng, lat } })
+            const matched = findBuildingAt(buildings, lng, lat)
+            const building = matched ? {
+              id:    matched.properties?.id ?? null,
+              pnu:   matched.properties?.pnu ?? null,
+              bldNm: matched.properties?.bldNm ?? null,
+            } : null
+            // 개발 단계 디버그 출력 — 좌표 → 매칭 결과
+            if (building) {
+              console.log('[SurveyMap] 탭한 좌표 → 매칭된 건물:', { lng, lat, ...building })
+            } else {
+              console.log('[SurveyMap] 탭한 좌표 → 매칭된 건물 없음:', { lng, lat })
+            }
+            setPickerState({ location: { lng, lat }, building })
           }}
         />
 
@@ -203,6 +256,22 @@ export default function SurveyMap() {
               initialFeature: f,
             })
           }}
+          onDelete={async (f) => {
+            // 되돌릴 수 없으므로 2 단계 확인.
+            if (!window.confirm('이 조사 데이터를 삭제하시겠어요?')) return
+            if (!window.confirm('되돌릴 수 없습니다. 사진까지 영구 삭제됩니다. 정말 진행하시겠어요?')) return
+            try {
+              await deleteSurvey({
+                surveyId:   f.properties.id,
+                photoPaths: f.properties.photoPaths || [],
+              })
+              setSelected(null)
+              showToast('삭제 완료')
+              await refreshSurveys()
+            } catch (e) {
+              showToast(e?.message || '삭제 실패')
+            }
+          }}
         />
       )}
 
@@ -213,12 +282,13 @@ export default function SurveyMap() {
           onCancel={() => setPickerState(null)}
           onPick={(surveyType) => {
             const loc = pickerState.location
+            const bld = pickerState.building   // 좌표 매칭으로 추출된 건물 정보 (없으면 null)
             setPickerState(null)
             setFormState({
               mode:       'new',
               surveyType,
               location:   loc,
-              building:   null,
+              building:   bld,
             })
           }}
         />
