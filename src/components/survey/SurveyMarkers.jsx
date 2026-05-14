@@ -1,24 +1,29 @@
 // 신당동 영역 내 조사 마커 레이어.
 //
-// status 별 색상:
-//   pending  → 노랑 (#f4b400)
-//   approved → 초록 (#34a853)
-//   rejected → 회색 (#888)
+// surveyType 별 색상 + SVG 아이콘:
+//   building → 파랑  (#1e88e5) + 집/건물 외곽선
+//   road     → 주황  (#fb8c00) + 평행선 + 점선 중앙선
+//   point    → 보라  (#8e24aa) + category 별 아이콘:
+//     public_toilet → WC 문자
+//     smoking_area  → 담배 + 연기
+//     그 외         → 채워진 원 (기본)
 //
-// survey_type 별 SVG 아이콘:
-//   building → 집/건물 외곽선
-//   road     → 평행선 + 점선 중앙선
-//   point    → 채워진 원
+// status (pending/approved/rejected) 는 마커 색에 반영하지 않음 —
+// 시각 구분의 1차 축은 type. status 는 상세 시트 / 어드민에서만 확인.
 //
 // 클릭 시 onSelect(feature) 호출 — 호출 측이 상세 시트 표시.
+//
+// 건물 조사에 entrance_location 이 있으면 보조 마커(빨간 문 아이콘)도 같이 표시.
+// 보조 마커는 비-인터랙티브 (CSS pointer-events: none).
 
+import { Fragment } from 'react'
 import { Marker } from 'react-leaflet'
 import L from 'leaflet'
 
-const STATUS_COLOR = {
-  pending:  '#f4b400',
-  approved: '#34a853',
-  rejected: '#9aa0a6',
+const TYPE_COLOR = {
+  building: '#1e88e5',  // 파랑
+  road:     '#fb8c00',  // 주황
+  point:    '#8e24aa',  // 보라
 }
 
 const ICON_SVG = {
@@ -40,14 +45,42 @@ const ICON_SVG = {
     </svg>`,
 }
 
+// point category 별 전용 아이콘. 매칭 안 되면 ICON_SVG.point 로 폴백.
+// viewBox(24×24) 를 거의 꽉 채우게 디자인 — 마커 안에서 충분히 커 보이도록.
+const POINT_ICON_SVG = {
+  public_toilet: `
+    <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+      <circle cx="5.5" cy="4" r="2.8" />
+      <path d="M1 8.5 L10 8.5 L10 15 L8.5 15 L8.5 21 L2.5 21 L2.5 15 L1 15 Z" />
+      <circle cx="18.5" cy="4" r="2.8" />
+      <path d="M13.5 15 L15.5 8.5 L21.5 8.5 L23 15 Z" />
+      <rect x="15.5" y="14" width="6" height="7" />
+    </svg>`,
+  smoking_area: `
+    <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+      <rect x="2" y="14" width="14" height="4" rx="0.6" />
+      <rect x="16" y="14" width="5" height="4" rx="0.6" opacity="0.45" />
+      <path d="M5 11c0-2 3-2 3-4M11 11c0-2 3-2 3-4M17 11c0-2 3-2 3-4"
+            fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" />
+    </svg>`,
+}
+
 const ICON_CACHE = {}
 
-function getIcon(status, surveyType) {
-  const key = `${status}-${surveyType}`
+function getIcon(surveyType, pointCategory) {
+  const key = surveyType === 'point'
+    ? `point-${pointCategory || 'default'}`
+    : surveyType
   if (ICON_CACHE[key]) return ICON_CACHE[key]
 
-  const color = STATUS_COLOR[status] || STATUS_COLOR.pending
-  const svg = ICON_SVG[surveyType] || ICON_SVG.point
+  const color = TYPE_COLOR[surveyType] || TYPE_COLOR.point
+  let svg
+  if (surveyType === 'point' && POINT_ICON_SVG[pointCategory]) {
+    svg = POINT_ICON_SVG[pointCategory]
+  } else {
+    svg = ICON_SVG[surveyType] || ICON_SVG.point
+  }
 
   const html = `
     <div class="sv-marker" style="background:${color}">
@@ -63,26 +96,63 @@ function getIcon(status, surveyType) {
   return ICON_CACHE[key]
 }
 
+// ─── 입구 위치 보조 마커 (빨간 문 아이콘) ─────────────────
+const ENTRANCE_ICON_SVG = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"
+       stroke-linecap="round" stroke-linejoin="round" width="11" height="11">
+    <path d="M7 3h10v18H7z" />
+    <circle cx="14" cy="13" r="1" fill="#fff" stroke="none" />
+  </svg>`
+
+let ENTRANCE_ICON = null
+function getEntranceIcon() {
+  if (ENTRANCE_ICON) return ENTRANCE_ICON
+  const html = `
+    <div class="sv-entrance-marker">
+      <span class="sv-entrance-marker-icon">${ENTRANCE_ICON_SVG}</span>
+    </div>`
+  ENTRANCE_ICON = L.divIcon({
+    className: 'sv-entrance-marker-wrapper',
+    html,
+    iconSize:   [20, 20],
+    iconAnchor: [10, 10],
+  })
+  return ENTRANCE_ICON
+}
+
 export default function SurveyMarkers({ features, onSelect }) {
   if (!features || features.length === 0) return null
   return features.map(f => {
     const coords = f?.geometry?.coordinates
     if (!coords || coords.length < 2) return null
-    const status = f.properties.status
     const type   = f.properties.surveyType
+    const ent    = f.properties.payload?.entrance_location
+    const hasEntrance = type === 'building'
+      && ent
+      && typeof ent.lng === 'number'
+      && typeof ent.lat === 'number'
     return (
-      <Marker
-        key={f.properties.id}
-        position={[coords[1], coords[0]]}
-        icon={getIcon(status, type)}
-        eventHandlers={{
-          click(e) {
-            // 마커 클릭이 map click 으로 전파돼 빈 곳 탭(B5) 트리거하지 않도록 차단
-            L.DomEvent.stopPropagation(e)
-            onSelect(f)
-          },
-        }}
-      />
+      <Fragment key={f.properties.id}>
+        <Marker
+          position={[coords[1], coords[0]]}
+          icon={getIcon(type, f.properties.payload?.category)}
+          eventHandlers={{
+            click(e) {
+              // 마커 클릭이 map click 으로 전파돼 빈 곳 탭(B5) 트리거하지 않도록 차단
+              L.DomEvent.stopPropagation(e)
+              onSelect(f)
+            },
+          }}
+        />
+        {hasEntrance && (
+          <Marker
+            position={[ent.lat, ent.lng]}
+            icon={getEntranceIcon()}
+            interactive={false}
+            keyboard={false}
+          />
+        )}
+      </Fragment>
     )
   })
 }

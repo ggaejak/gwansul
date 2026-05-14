@@ -5,9 +5,9 @@
 
 import { describePayload } from '../../lib/surveyLabels'
 
-// describePayload 가 다루는 알려진 키 (매핑된 키는 표에서 제외).
+// describePayload 가 다루는 알려진 키 + 별도 렌더링하는 키 (extras dump 에서 제외).
 const KNOWN_KEYS = {
-  building: ['first_floor_use', 'floor_count', 'is_vacant'],
+  building: ['first_floor_use', 'floor_count', 'is_vacant', 'entrance_location'],
   road:     ['night_brightness', 'road_width'],
   point:    ['category'],
 }
@@ -25,10 +25,12 @@ export default function PayloadView({ surveyType, payload, memo }) {
   const extras = Object.entries(payload || {}).filter(
     ([k, v]) => !known.has(k) && v != null && v !== '',
   )
+  const showEntrance = surveyType === 'building'
+  const entranceLoc = payload?.entrance_location
 
   return (
     <div className="sa-payload">
-      {fields.length > 0 && (
+      {(fields.length > 0 || showEntrance) && (
         <dl className="sa-fields">
           {fields.map(({ label, value }) => (
             <div key={label} className="sa-field-row">
@@ -36,6 +38,16 @@ export default function PayloadView({ surveyType, payload, memo }) {
               <dd>{value}</dd>
             </div>
           ))}
+          {showEntrance && (
+            <div className="sa-field-row">
+              <dt>건물 입구</dt>
+              <dd>
+                {entranceLoc
+                  ? `${entranceLoc.lat.toFixed(6)}, ${entranceLoc.lng.toFixed(6)}`
+                  : '미지정'}
+              </dd>
+            </div>
+          )}
         </dl>
       )}
 
@@ -57,7 +69,7 @@ export default function PayloadView({ surveyType, payload, memo }) {
         </dl>
       )}
 
-      {fields.length === 0 && extras.length === 0 && !memo && (
+      {fields.length === 0 && extras.length === 0 && !memo && !showEntrance && (
         <div className="sa-payload-empty">입력값 없음</div>
       )}
     </div>

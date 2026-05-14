@@ -121,6 +121,8 @@ export default function SurveyMap() {
   const [selected,  setSelected]  = useState(null)   // 마커 클릭 → 상세 시트
   const [formState, setFormState] = useState(null)   // 입력/수정 폼 상태
   const [pickerState, setPickerState] = useState(null) // 빈 곳 탭 → 유형 선택
+  const [entrancePickActive, setEntrancePickActive] = useState(false)
+  const entranceResolverRef = useRef(null)
   const [toast, setToast] = useState(null)
   const toastTimerRef = useRef(null)
 
@@ -162,6 +164,27 @@ export default function SurveyMap() {
     toastTimerRef.current = setTimeout(() => setToast(null), 4000)
   }
 
+  // ─── 입구 위치 픽 ─────────────────────────────────────────
+  // SurveyForm 에서 호출 → 다음 지도 클릭 좌표를 Promise 로 반환.
+  // 취소 시 null 반환.
+  function requestEntrancePick() {
+    return new Promise(resolve => {
+      // 이전 요청이 남아있으면 null 로 종료 (이중 호출 방지)
+      if (entranceResolverRef.current) {
+        entranceResolverRef.current(null)
+      }
+      entranceResolverRef.current = resolve
+      setEntrancePickActive(true)
+    })
+  }
+
+  function finishEntrancePick(loc) {
+    setEntrancePickActive(false)
+    const resolver = entranceResolverRef.current
+    entranceResolverRef.current = null
+    resolver?.(loc)
+  }
+
   // 조사 데이터 의존 키 — 데이터 갱신 시 강제 재렌더.
   const markersKey = surveys
     ? `s-${surveys.features.length}-${surveys.features.map(f => f.properties?.updatedAt || '').join('|').length}`
@@ -193,9 +216,16 @@ export default function SurveyMap() {
         {/* 클릭 좌표가 어떤 건물 폴리곤 안에 있으면 그 건물 정보도 같이 픽업 */}
         <MapClickHandler
           onClick={(e) => {
+            const { lng, lat } = e.latlng
+
+            // 입구 지정 모드 — 폼이 떠 있어도 우선 처리
+            if (entrancePickActive) {
+              finishEntrancePick({ lng, lat })
+              return
+            }
+
             // 다른 시트/폼/picker 가 열린 동안은 무시
             if (formState || selected || pickerState) return
-            const { lng, lat } = e.latlng
             if (!isInsideSindang(lng, lat)) {
               showToast('신당동 영역 안에서만 조사 가능합니다')
               return
@@ -307,7 +337,23 @@ export default function SurveyMap() {
             showToast(formState.mode === 'edit' ? '수정 완료' : '저장 완료')
             await refreshSurveys()
           }}
+          onRequestEntrancePick={requestEntrancePick}
+          pickingEntrance={entrancePickActive}
         />
+      )}
+
+      {/* 입구 지정 모드 안내 배너 */}
+      {entrancePickActive && (
+        <div className="sv-entrance-banner" role="status">
+          <span className="sv-entrance-banner-msg">건물 입구 위치를 탭해주세요</span>
+          <button
+            type="button"
+            className="sv-entrance-banner-cancel"
+            onClick={() => finishEntrancePick(null)}
+          >
+            취소
+          </button>
+        </div>
       )}
     </div>
   )
