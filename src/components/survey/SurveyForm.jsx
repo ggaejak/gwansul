@@ -56,14 +56,18 @@ export default function SurveyForm({
   initialFeature, // edit 모드 prefill
   onClose,
   onSaved,
+  onRequestEntrancePick, // () => Promise<{lng,lat} | null>
+  pickingEntrance,       // boolean — 부모가 입구 지정 모드일 때 폼을 화면 밖으로
 }) {
   // ─── 초기값 ─────────────────────────────────────────────
   const initialPayload = initialFeature?.properties?.payload || {}
   const initialMemo    = initialFeature?.properties?.memo || ''
   const initialPaths   = initialFeature?.properties?.photoPaths || []
+  const initialEntrance = initialPayload.entrance_location || null
 
   const [payload, setPayload] = useState(initialPayload)
   const [memo,    setMemo]    = useState(initialMemo)
+  const [entranceLocation, setEntranceLocation] = useState(initialEntrance)
   const [existingPhotos, setExistingPhotos] = useState(
     initialPaths.map(path => ({ path, url: getPhotoUrl(path) })),
   )
@@ -134,7 +138,6 @@ export default function SurveyForm({
       if (!payload.road_width)       errs.push('도로 폭을 선택하세요')
     } else if (surveyType === 'point') {
       if (!payload.category)         errs.push('카테고리를 선택하세요')
-      if (!memo.trim())              errs.push('메모를 입력하세요')
     }
     return errs
   }, [surveyType, payload, memo, totalPhotoCount])
@@ -179,6 +182,13 @@ export default function SurveyForm({
     })
   }
 
+  // ─── 입구 위치 픽 ─────────────────────────────────────────
+  async function handlePickEntrance() {
+    if (!onRequestEntrancePick) return
+    const loc = await onRequestEntrancePick()
+    if (loc) setEntranceLocation({ lng: loc.lng, lat: loc.lat })
+  }
+
   // ─── 저장 ─────────────────────────────────────────────────
   async function handleSubmit(e) {
     e.preventDefault()
@@ -202,6 +212,19 @@ export default function SurveyForm({
       }
       const finalPhotoPaths = [...existingPaths, ...newPaths]
 
+      // entrance_location: 지정 시에만 payload 에 포함 (null 명시 X)
+      // payload state 는 initialPayload 복사본이라 미터치 시 옛 값이 남아있을 수 있어
+      // 항상 entranceLocation state 기준으로 재구성.
+      const finalPayload = { ...payload }
+      if (entranceLocation) {
+        finalPayload.entrance_location = {
+          lng: entranceLocation.lng,
+          lat: entranceLocation.lat,
+        }
+      } else {
+        delete finalPayload.entrance_location
+      }
+
       // 2) DB
       if (mode === 'new') {
         const fullLoc = location || initialFeature?.geometry
@@ -213,13 +236,13 @@ export default function SurveyForm({
           lat:         location.lat,
           buildingId:  building?.id ?? null,
           buildingPnu: building?.pnu ?? null,
-          payload,
+          payload:     finalPayload,
           memo:        memo || null,
           photoPaths:  finalPhotoPaths,
         })
       } else {
         await updateSurvey(surveyId, {
-          payload,
+          payload:    finalPayload,
           memo:       memo || null,
           photoPaths: finalPhotoPaths,
         })
@@ -243,10 +266,13 @@ export default function SurveyForm({
   return (
     <>
       <div
-        className="sv-form-backdrop"
-        onClick={() => { if (!submitting) onClose?.() }}
+        className={`sv-form-backdrop ${pickingEntrance ? 'is-picking' : ''}`}
+        onClick={() => { if (!submitting && !pickingEntrance) onClose?.() }}
       />
-      <form className="sv-form-sheet" onSubmit={handleSubmit}>
+      <form
+        className={`sv-form-sheet ${pickingEntrance ? 'is-picking' : ''}`}
+        onSubmit={handleSubmit}
+      >
         <div className="sv-sheet-handle" />
 
         <header className="sv-form-header">
@@ -439,17 +465,13 @@ export default function SurveyForm({
 
           {/* ── 메모 ── */}
           <div className="sv-form-field">
-            <div className="sv-form-label">
-              메모 {surveyType === 'point' && <span className="sv-required">*</span>}
-            </div>
+            <div className="sv-form-label">메모</div>
             <textarea
               className="sv-form-textarea"
               rows={3}
               value={memo}
               onChange={e => setMemo(e.target.value)}
-              placeholder={surveyType === 'point'
-                ? '특이사항을 기록하세요'
-                : '자유 메모 (선택)'}
+              placeholder="자유 메모 (선택)"
             />
           </div>
 
@@ -463,6 +485,39 @@ export default function SurveyForm({
               }))}
             </div>
           </div>
+
+          {/* ── 건물 — 입구 위치 (선택) ── */}
+          {surveyType === 'building' && (
+            <div className="sv-form-field">
+              <div className="sv-form-label">
+                건물 입구 위치
+                <span className="sv-form-label-aux">선택</span>
+              </div>
+              {entranceLocation ? (
+                <div className="sv-entrance-row">
+                  <div className="sv-entrance-coords">
+                    ✓ {entranceLocation.lat.toFixed(6)}, {entranceLocation.lng.toFixed(6)}
+                  </div>
+                  <button
+                    type="button"
+                    className="sv-entrance-clear"
+                    onClick={() => setEntranceLocation(null)}
+                  >
+                    지우기
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="sv-entrance-pick"
+                  onClick={handlePickEntrance}
+                  disabled={!onRequestEntrancePick || pickingEntrance}
+                >
+                  지도에서 입구 선택
+                </button>
+              )}
+            </div>
+          )}
 
         </div>
 

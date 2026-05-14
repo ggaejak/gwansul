@@ -152,6 +152,29 @@
   justify-content: center;
 }
 
+/* 건물 입구 보조 마커 — 작은 빨간 문 아이콘 (비-인터랙티브) */
+.sv-entrance-marker-wrapper {
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none;
+}
+.sv-entrance-marker {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #d92f2f;
+  border: 1.5px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sv-entrance-marker-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 
 /* ─── 상세 시트 ─────────────────────────────────────────────── */
 .sv-sheet-backdrop {
@@ -339,12 +362,13 @@
 .sv-btn-secondary {
   flex: 1;
   height: 44px;
+  padding: 0 24px;
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.04em;
   border: 1px solid;
   cursor: pointer;
-  border-radius: 0;
+  border-radius: 999px;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .sv-btn-primary {
@@ -365,7 +389,7 @@
 }
 .sv-btn-danger-ghost {
   height: 44px;
-  padding: 0 16px;
+  padding: 0 20px;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -373,7 +397,7 @@
   color: #b91c1c;
   border: 1px solid #fca5a5;
   cursor: pointer;
-  border-radius: 0;
+  border-radius: 999px;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 .sv-btn-danger-ghost:hover {
@@ -544,6 +568,101 @@
   border: 1px solid #eee;
   padding: 8px 10px;
 }
+
+/* ─── 입구 위치 픽 (건물 조사용) ─────────────────────────── */
+.sv-entrance-pick {
+  height: 44px;
+  background: #fff;
+  border: 1px dashed #888;
+  color: #111;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0 14px;
+  border-radius: 0;
+  transition: border-color 0.12s, background 0.12s;
+}
+.sv-entrance-pick:hover:not(:disabled) {
+  border-color: #111;
+  background: #fafafa;
+}
+.sv-entrance-pick:disabled {
+  color: #aaa;
+  border-color: #ddd;
+  cursor: not-allowed;
+}
+.sv-entrance-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sv-entrance-coords {
+  flex: 1;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  color: #111;
+  background: #f7f7f7;
+  border: 1px solid #eee;
+  padding: 8px 10px;
+}
+.sv-entrance-clear {
+  flex-shrink: 0;
+  height: 36px;
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 12px;
+  border-radius: 0;
+}
+.sv-entrance-clear:hover { color: #c00; border-color: #c00; }
+
+/* 입구 픽 모드 — 폼 시트 화면 밖으로 슬라이드 다운 (state 유지) */
+.sv-form-sheet.is-picking {
+  transform: translateY(100%);
+  transition: transform 0.18s ease-in;
+  pointer-events: none;
+}
+.sv-form-backdrop.is-picking {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease-in;
+}
+
+/* 입구 픽 안내 배너 (지도 상단) */
+.sv-entrance-banner {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1900;
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  max-width: calc(100vw - 32px);
+}
+.sv-entrance-banner-msg {
+  letter-spacing: -0.01em;
+}
+.sv-entrance-banner-cancel {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 12px;
+  cursor: pointer;
+  border-radius: 0;
+  font-family: inherit;
+}
+.sv-entrance-banner-cancel:hover { border-color: #fff; background: rgba(255, 255, 255, 0.08); }
 
 
 /* ─── 다중 선택 chips (1층 업종 등) ─────────────────────────── */
