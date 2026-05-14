@@ -997,6 +997,239 @@ html.gis-mode .hamburger span    { background: #555 !important; }
   border-bottom: 1px solid #f0f0f0;
 }
 .g-detail-section:last-of-type { border-bottom: none; }
+
+/* ── 현장조사 기록 (건물 카드 내 + 단독 마커 상세) ── */
+.g-survey-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.g-survey-rec {
+  padding: 10px 12px;
+  border: 1px solid #eee;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.g-survey-rec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.g-survey-rec-type {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #fff;
+}
+.g-survey-rec-type-building { background: #1e88e5; }
+.g-survey-rec-type-point    { background: #8e24aa; }
+.g-survey-rec-type-road     { background: #fb8c00; }
+
+.g-survey-rec-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid;
+}
+.g-survey-rec-status-pending  { color: #b88a00; border-color: #f0c000; background: #fff8d6; }
+.g-survey-rec-status-approved { color: #1e7c2c; border-color: #34a853; background: #e8f5ea; }
+.g-survey-rec-status-rejected { color: #5b5f66; border-color: #9aa0a6; background: #f1f3f4; }
+
+.g-survey-rec-date {
+  margin-left: auto;
+  font-size: 11px;
+  color: #999;
+  font-variant-numeric: tabular-nums;
+}
+
+.g-survey-rec-fields {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+.g-survey-rec-field {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.g-survey-rec-field dt { color: #888; margin: 0; }
+.g-survey-rec-field dd { color: #111; margin: 0; text-align: right; }
+
+.g-survey-rec-memo {
+  margin: 0;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  font-size: 12px;
+  color: #333;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.g-survey-rec-photos {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.g-survey-rec-photo {
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #eee;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.g-survey-rec-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.18s ease-out;
+}
+.g-survey-rec-photo:hover img { transform: scale(1.04); }
+
+/* ── 업종 이력 (음식점 인허가) ── */
+.g-biz-group { margin-top: 8px; }
+.g-biz-group + .g-biz-group { margin-top: 14px; }
+
+.g-biz-group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+.g-biz-group-label-active { color: #1e7c2c; }
+.g-biz-group-label-closed { color: #888; }
+
+.g-biz-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.g-biz-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #222;
+}
+.g-biz-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.g-biz-name {
+  font-weight: 500;
+  color: #111;
+  flex-shrink: 0;
+}
+.g-biz-period {
+  color: #888;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.g-biz-more-btn {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border: 1px solid #e0e0e0;
+  background: #fafafa;
+  color: #555;
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+}
+.g-biz-more-btn:hover { background: #f0f0f0; }
+
+/* ── 사진 라이트박스 (조사 사진 크게 보기) ── */
+.g-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: g-lightbox-in 0.16s ease-out;
+}
+@keyframes g-lightbox-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.g-lightbox-stage {
+  max-width: 92vw;
+  max-height: 88vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
+.g-lightbox-stage img {
+  max-width: 92vw;
+  max-height: 88vh;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+}
+.g-lightbox-close,
+.g-lightbox-nav {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  width: 44px;
+  height: 44px;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s;
+}
+.g-lightbox-close:hover,
+.g-lightbox-nav:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+.g-lightbox-close { top: 16px; right: 16px; font-size: 22px; }
+.g-lightbox-prev  { left: 16px; top: 50%; transform: translateY(-50%); font-size: 34px; }
+.g-lightbox-next  { right: 16px; top: 50%; transform: translateY(-50%); font-size: 34px; }
+.g-lightbox-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 12px;
+  border-radius: 999px;
+}
+@media (max-width: 768px) {
+  .g-lightbox-prev { left: 8px; }
+  .g-lightbox-next { right: 8px; }
+}
 .g-detail-rows {
   display: flex;
   flex-direction: column;
