@@ -191,13 +191,13 @@ export default function SurveyMap() {
     : 's-0'
 
   return (
-    <div className="sv-map-shell">
+    <div className={`sv-map-shell ${entrancePickActive ? 'is-picking-entrance' : ''}`}>
       <MapContainer
         bounds={AREA_BOUNDS || undefined}
         center={AREA_BOUNDS ? undefined : [37.565, 127.017]}
         zoom={AREA_BOUNDS ? undefined : 16}
         minZoom={14}
-        maxZoom={19}
+        maxZoom={21}
         zoomControl={false}
         style={{ width: '100%', height: '100%' }}
       >
@@ -205,7 +205,8 @@ export default function SurveyMap() {
           url={TILE_URL}
           attribution={TILE_ATTR}
           subdomains="abcd"
-          maxZoom={19}
+          maxNativeZoom={19}
+          maxZoom={21}
         />
         <ZoomControl position="bottomright" />
 

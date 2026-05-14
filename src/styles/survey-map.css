@@ -631,38 +631,69 @@
   transition: opacity 0.18s ease-in;
 }
 
-/* 입구 픽 안내 배너 (지도 상단) */
+/* 입구 픽 안내 배너 (지도 상단) — 빨간 톤으로 픽 모드 강조 */
 .sv-entrance-banner {
   position: fixed;
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1900;
-  background: rgba(17, 17, 17, 0.92);
+  background: #d92f2f;
   color: #fff;
-  padding: 10px 14px;
+  padding: 12px 18px;
   display: flex;
   align-items: center;
   gap: 14px;
   font-size: 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(217, 47, 47, 0.45);
   max-width: calc(100vw - 32px);
+  animation: sv-banner-in 0.18s ease-out;
+}
+@keyframes sv-banner-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
 }
 .sv-entrance-banner-msg {
   letter-spacing: -0.01em;
 }
 .sv-entrance-banner-cancel {
   flex-shrink: 0;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.55);
   color: #fff;
   font-size: 12px;
-  padding: 5px 12px;
+  font-weight: 600;
+  padding: 5px 14px;
   cursor: pointer;
-  border-radius: 0;
+  border-radius: 999px;
   font-family: inherit;
 }
-.sv-entrance-banner-cancel:hover { border-color: #fff; background: rgba(255, 255, 255, 0.08); }
+.sv-entrance-banner-cancel:hover { background: rgba(255, 255, 255, 0.3); border-color: #fff; }
+
+/* ── 입구 픽 모드: 지도 자체에 시각 표시 ──
+   - 타일 그레이스케일/약간 어둡게 → "다른 모드" 임을 즉시 인지
+   - crosshair 커서 → "탭하라" 신호
+   - 빨간 프레임 ::after → 픽 모드 경계 강조 */
+.sv-map-shell.is-picking-entrance .leaflet-tile-pane {
+  filter: grayscale(0.55) brightness(0.88) contrast(1.05);
+  transition: filter 0.18s ease-out;
+}
+.sv-map-shell.is-picking-entrance .leaflet-container,
+.sv-map-shell.is-picking-entrance .leaflet-grab,
+.sv-map-shell.is-picking-entrance .leaflet-interactive {
+  cursor: crosshair !important;
+}
+.sv-map-shell.is-picking-entrance::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 4px solid #d92f2f;
+  pointer-events: none;
+  z-index: 1850;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
 
 
 /* ─── 다중 선택 chips (1층 업종 등) ─────────────────────────── */
