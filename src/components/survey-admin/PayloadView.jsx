@@ -3,11 +3,12 @@
 // describePayload (src/lib/surveyLabels.js) 로 한글 라벨 변환,
 // 라벨화되지 않은 키도 빠뜨리지 않도록 "그 외 필드" 섹션에 dump.
 
-import { describePayload } from '../../lib/surveyLabels'
+import { describePayload, getEntranceLocations } from '../../lib/surveyLabels'
 
 // describePayload 가 다루는 알려진 키 + 별도 렌더링하는 키 (extras dump 에서 제외).
+// entrance_location (레거시 단일) / entrance_locations (신규 배열) 모두 known.
 const KNOWN_KEYS = {
-  building: ['first_floor_use', 'floor_count', 'is_vacant', 'entrance_location'],
+  building: ['first_floor_use', 'floor_count', 'is_vacant', 'entrance_location', 'entrance_locations'],
   road:     ['night_brightness', 'road_width'],
   point:    ['category'],
 }
@@ -26,7 +27,7 @@ export default function PayloadView({ surveyType, payload, memo }) {
     ([k, v]) => !known.has(k) && v != null && v !== '',
   )
   const showEntrance = surveyType === 'building'
-  const entranceLoc = payload?.entrance_location
+  const entrances = showEntrance ? getEntranceLocations(payload) : []
 
   return (
     <div className="sa-payload">
@@ -40,11 +41,13 @@ export default function PayloadView({ surveyType, payload, memo }) {
           ))}
           {showEntrance && (
             <div className="sa-field-row">
-              <dt>건물 입구</dt>
+              <dt>건물 입구{entrances.length > 1 && ` (${entrances.length})`}</dt>
               <dd>
-                {entranceLoc
-                  ? `${entranceLoc.lat.toFixed(6)}, ${entranceLoc.lng.toFixed(6)}`
-                  : '미지정'}
+                {entrances.length === 0
+                  ? '미지정'
+                  : entrances.map((e, i) => (
+                      <div key={i}>{e.lat.toFixed(6)}, {e.lng.toFixed(6)}</div>
+                    ))}
               </dd>
             </div>
           )}

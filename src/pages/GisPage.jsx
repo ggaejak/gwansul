@@ -18,6 +18,10 @@ import PulseGuide from '../components/gis/PulseGuide'
 import LayerSelector from '../components/gis/LayerSelector'
 import { fetchBuildingsNearPoint, getBuildingsMode } from '../data/buildings'
 import { fetchZoningIntersect, getZoningMode } from '../data/zoning'
+import { fetchSurveysInArea, getPhotoUrl } from '../data/surveys'
+import { fetchBusinessHistoryByBuilding } from '../data/businessHistory'
+import SurveyMarkers, { EntranceMarkers } from '../components/survey/SurveyMarkers'
+import { TYPE_LABELS, STATUS_LABELS, describePayload, getEntranceLocations } from '../lib/surveyLabels'
 import landmarksData from '../gis/data/junggu-landmarks.json'
 import surveyAreaData from '../gis/data/survey-area.json'
 import parksData from '../gis/data/junggu-parks.json'
@@ -206,7 +210,14 @@ export default function GisPage() {
   const [missingFilter, setMissingFilter] = useState(null) // null=용적률색상, 'vlRat','grndFlrCnt','platArea','totArea'
   const [showSurveyArea, setShowSurveyArea] = useState(false)
   const [showParks, setShowParks] = useState(false)
+  // 현장조사 레이어 — visibleSection === 'survey' 일 때만 의미 있음.
+  // 3 종 sub-toggle 독립적으로 on/off.
+  const [surveyTypes, setSurveyTypes] = useState({ building: true, point: true, road: true })
+  const [surveysFC, setSurveysFC] = useState(null)   // FeatureCollection | null
   const [selectedBuilding, setSelectedBuilding] = useState(null)
+  const [businessHistory, setBusinessHistory] = useState([])  // 선택된 건물의 음식점 영업 이력
+  const [selectedSurvey, setSelectedSurvey] = useState(null)  // 점/도로 마커 클릭 시 우측 패널에 상세
+  const [lightbox, setLightbox] = useState(null)              // { urls: string[], index: number } | null
   const [toast, setToast] = useState(null)
   const [mobileSheet, setMobileSheet] = useState(0) // 0=숨김, 1=작게, 2=크게
   const touchYRef = useRef(0)
@@ -447,6 +458,66 @@ export default function GisPage() {
     return new Set(filtered.map(f => f.properties.pnu))
   }, [filtered])
 
+  // ─── 현장조사 데이터 fetch (visibleSection === 'survey' 진입 시 1 회) ───
+  useEffect(() => {
+    if (visibleSection !== 'survey') return
+    if (surveysFC) return  // 이미 받아옴
+    let cancelled = false
+    fetchSurveysInArea().then(fc => {
+      if (!cancelled) setSurveysFC(fc)
+    }).catch(() => { /* surveys.js 가 콘솔에 로그 — 빈 결과 폴백 */ })
+    return () => { cancelled = true }
+  }, [visibleSection, surveysFC])
+
+  // 조사된 건물 PNU Set + 점/도로 features 분리 (survey 모드 + 해당 sub-toggle 일 때만 유의미)
+  const surveyedPnuSet = useMemo(() => {
+    if (!surveysFC?.features) return new Set()
+    const s = new Set()
+    for (const f of surveysFC.features) {
+      if (f.properties?.surveyType === 'building' && f.properties.buildingPnu) {
+        s.add(f.properties.buildingPnu)
+      }
+    }
+    return s
+  }, [surveysFC])
+
+  const surveyMarkerFeatures = useMemo(() => {
+    if (!surveysFC?.features) return []
+    return surveysFC.features.filter(f => {
+      const t = f.properties?.surveyType
+      return (t === 'point' || t === 'road')
+    })
+  }, [surveysFC])
+
+  // 건물 조사 — 입구 마커용 (entrance_location 있는 것만 EntranceMarkers 에서 추가 필터)
+  const buildingSurveyFeatures = useMemo(() => {
+    if (!surveysFC?.features) return []
+    return surveysFC.features.filter(f => f.properties?.surveyType === 'building')
+  }, [surveysFC])
+
+  // 현재 선택된 건물의 PNU 와 매칭되는 조사 기록
+  const surveysForSelectedBuilding = useMemo(() => {
+    if (!selectedBuilding || !surveysFC?.features) return []
+    const pnu = selectedBuilding.properties?.pnu
+    if (!pnu) return []
+    return surveysFC.features.filter(f => f.properties?.buildingPnu === pnu)
+  }, [selectedBuilding, surveysFC])
+
+  // 선택된 건물의 음식점 영업 이력 (Supabase RPC)
+  // PNU 만으로 매칭 — buildings 정적 모드에서는 buildingId 가 없으므로 PNU 일원화.
+  useEffect(() => {
+    const pnu = selectedBuilding?.properties?.pnu
+    if (!pnu) {
+      setBusinessHistory([])
+      return
+    }
+    let cancelled = false
+    fetchBusinessHistoryByBuilding({ pnu }).then(list => {
+      if (!cancelled) setBusinessHistory(list)
+    })
+    return () => { cancelled = true }
+  }, [selectedBuilding])
+
   // 원 밖 건물 스타일
   const OUTSIDE_STYLE = { fillColor: '#ddd', fillOpacity: 0.35, weight: 0.2, color: 'rgba(0,0,0,0.04)' }
 
@@ -493,8 +564,20 @@ export default function GisPage() {
     if (visibleSection === 'transit' || visibleSection === 'demo' || visibleSection === 'commerce') {
       return { fillColor: '#e8e8e8', fillOpacity: 0.4, weight: 0.2, color: 'rgba(0,0,0,0.03)' }
     }
+    if (visibleSection === 'survey') {
+      // 건물조사 sub-toggle off → 모든 건물 흐리게
+      if (!surveyTypes.building) {
+        return { fillColor: '#e8e8e8', fillOpacity: 0.25, weight: 0.2, color: 'rgba(0,0,0,0.04)' }
+      }
+      // on → 조사된 PNU 만 파란 하이라이트, 나머지는 옅은 회색 배경
+      const pnu = feature.properties.pnu
+      if (pnu && surveyedPnuSet.has(pnu)) {
+        return { fillColor: '#1e88e5', fillOpacity: 0.75, weight: 0.6, color: '#1565c0' }
+      }
+      return { fillColor: '#e8e8e8', fillOpacity: 0.25, weight: 0.2, color: 'rgba(0,0,0,0.04)' }
+    }
     return { fillColor: '#bbb', fillOpacity: 0.5, weight: 0.3, color: 'rgba(0,0,0,0.06)' }
-  }, [visibleSection, clickedPoint, filteredSet, ageFilterYear, circleEnabled, missingFilter])
+  }, [visibleSection, clickedPoint, filteredSet, ageFilterYear, circleEnabled, missingFilter, surveyTypes, surveyedPnuSet])
 
   const showToast = useCallback((msg) => {
     setToast(msg)
@@ -526,6 +609,7 @@ export default function GisPage() {
       mouseout: e => { if (geoRef.current) geoRef.current.resetStyle(e.target) },
       click: async () => {
         setSelectedBuilding(feature)
+        setSelectedSurvey(null)   // 건물 선택 시 마커 상세 닫음
         setMobileSheet(1)
         if (!circleEnabled) {
           await copyAddress(feature.properties.address || '')
@@ -535,9 +619,22 @@ export default function GisPage() {
     })
   }, [copyAddress, showToast, circleEnabled])
 
+  // 베이스맵:
+  //   figground (도시 형태) → CARTO light_nolabels — figure-ground 다이어그램 시각 의도 유지
+  //   그 외                  → VWorld Base (한국 건축물대장 기반)로 배경 건물 윤곽이
+  //                            우리 GeoJSON 벡터 레이어와 더 잘 맞도록.
+  //   VWorld key 없으면 CARTO light_all 로 폴백 (survey 페이지와 동일 패턴).
+  const VWORLD_KEY = import.meta.env.VITE_VWORLD_API_KEY
   const tileUrl = visibleSection === 'figground'
     ? 'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png'
-    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+    : (VWORLD_KEY
+        ? `https://api.vworld.kr/req/wmts/1.0.0/${VWORLD_KEY}/Base/{z}/{y}/{x}.png`
+        : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png')
+  const tileAttr = visibleSection === 'figground'
+    ? '&copy; OpenStreetMap &copy; CARTO'
+    : (VWORLD_KEY
+        ? '&copy; <a href="https://www.vworld.kr">VWorld</a>'
+        : '&copy; OpenStreetMap &copy; CARTO')
 
   return (
     <div className="gis-page">
@@ -637,18 +734,29 @@ export default function GisPage() {
               <LayerSelector
                 value={visibleSection}
                 onChange={setVisibleSection}
+                surveyTypes={surveyTypes}
+                onSurveyTypesChange={setSurveyTypes}
               />
-              {selectedBuilding ? (
+              {selectedSurvey ? (
+                <SurveyDetailCard
+                  feature={selectedSurvey}
+                  onClose={() => setSelectedSurvey(null)}
+                  onPhotoOpen={(urls, idx) => setLightbox({ urls, index: idx })}
+                />
+              ) : selectedBuilding ? (
                 <BuildingDetailCard
                   feature={selectedBuilding}
                   zoningData={zoningData}
+                  surveys={surveysForSelectedBuilding}
+                  businessHistory={businessHistory}
                   onClose={() => setSelectedBuilding(null)}
                   onOpenEum={() => openEum(selectedBuilding.properties.address)}
+                  onPhotoOpen={(urls, idx) => setLightbox({ urls, index: idx })}
                 />
               ) : (
                 <div className="g-empty">
                   <div className="g-empty-icon">⊕</div>
-                  <p>건물을 클릭하면<br />상세 정보를 확인할 수 있습니다</p>
+                  <p>건물 또는 조사 마커를 클릭하면<br />상세 정보를 확인할 수 있습니다</p>
                 </div>
               )}
             </>
@@ -838,7 +946,7 @@ export default function GisPage() {
             center={CENTER}
             zoom={16}
             minZoom={13}
-            maxZoom={18}
+            maxZoom={20}
             maxBounds={BOUNDS}
             maxBoundsViscosity={1.0}
             zoomControl={false}
@@ -847,9 +955,11 @@ export default function GisPage() {
             <TileLayer
               key={tileUrl}
               url={tileUrl}
-              attribution='&copy; OpenStreetMap &copy; CARTO'
+              attribution={tileAttr}
               subdomains="abcd"
-              maxZoom={18}
+              maxNativeZoom={19}
+              maxZoom={20}
+              opacity={visibleSection === 'figground' ? 1 : 0.55}
             />
             <ZoomControl position="bottomright" />
             <MapClick onClick={p => { setClickedPoint(p); setMobileSheet(1) }} />
@@ -868,7 +978,7 @@ export default function GisPage() {
                 data={buildingData}
                 styleFn={buildingStyle}
                 onEachBuilding={onEachBuilding}
-                deps={`${visibleSection}-${filteredSet.size}-${clickedPoint?.[0]}-${ageFilterYear}-${circleEnabled}-${missingFilter}`}
+                deps={`${visibleSection}-${filteredSet.size}-${clickedPoint?.[0]}-${ageFilterYear}-${circleEnabled}-${missingFilter}-${surveyTypes.building}-${surveyedPnuSet.size}`}
               />
             )}
 
@@ -920,6 +1030,27 @@ export default function GisPage() {
               <LandmarkLayer landmarks={filteredLandmarks} clickedPoint={clickedPoint} radius={radius} circleEnabled={circleEnabled} />
             )}
 
+            {/* 현장조사 — 점/도로 마커 (건물은 폴리곤 하이라이트로 별도 처리) */}
+            {visibleSection === 'survey' && (
+              <SurveyMarkers
+                features={surveyMarkerFeatures.filter(f => {
+                  const t = f.properties?.surveyType
+                  return (t === 'point' && surveyTypes.point)
+                      || (t === 'road'  && surveyTypes.road)
+                })}
+                onSelect={(f) => {
+                  setSelectedSurvey(f)
+                  setSelectedBuilding(null)   // 마커 선택 시 건물 상세 닫음
+                  setMobileSheet(1)
+                }}
+              />
+            )}
+
+            {/* 현장조사 — 건물 입구 빨간 보조 마커 (건물조사 토글 켜져 있을 때만) */}
+            {visibleSection === 'survey' && surveyTypes.building && (
+              <EntranceMarkers features={buildingSurveyFeatures} />
+            )}
+
             {/* 아티클 모드 시각 자료 (1차 미사용; articleVisuals 등록 시 활성) */}
             {mode === 'articles' && selectedArticleId != null && (
               <ArticleMapOverlay articleId={selectedArticleId} />
@@ -927,6 +1058,14 @@ export default function GisPage() {
           </MapContainer>
 
           {toast && <div className="g-toast">{toast}</div>}
+
+          {lightbox && (
+            <PhotoLightbox
+              urls={lightbox.urls}
+              initialIndex={lightbox.index}
+              onClose={() => setLightbox(null)}
+            />
+          )}
 
           <button
             className={`g-survey-toggle ${showSurveyArea ? 'active' : ''}`}
@@ -987,8 +1126,13 @@ function BuildingLayer({ geoRef, data, styleFn, onEachBuilding, deps }) {
   }, [map, data]) // data가 바뀔 때만 재생성
 
   // 스타일 변경 시: 레이어 삭제 없이 스타일만 업데이트
+  //
+  // ※ layer.options.style 도 함께 갱신해야 mouseout 의 resetStyle 이
+  //    최신 styleFn 을 사용한다. (안 그러면 hover → mouseout 시 레이어 생성
+  //    당시의 옛 styleFn 결과로 되돌아가 "커서 자국" 색이 남는 버그 발생.)
   useEffect(() => {
     if (!initializedRef.current || !layerRef.current) return
+    layerRef.current.options.style = styleFn
     layerRef.current.eachLayer(layer => {
       const feature = layer.feature
       if (feature) {
@@ -2232,7 +2376,7 @@ function ParksLayer({ data }) {
 // ═══════════════════════════════════════════════════════════════
 //  건물 상세 카드 (전체 보기 모드)
 // ═══════════════════════════════════════════════════════════════
-function BuildingDetailCard({ feature, zoningData, onClose, onOpenEum }) {
+function BuildingDetailCard({ feature, zoningData, surveys, businessHistory, onClose, onOpenEum, onPhotoOpen }) {
   const p = feature.properties
   const currentYear = 2026
 
@@ -2275,6 +2419,23 @@ function BuildingDetailCard({ feature, zoningData, onClose, onOpenEum }) {
         </div>
         <button className="g-selected-close" onClick={onClose}>✕</button>
       </div>
+
+      {/* 현장조사 기록 — PNU 매칭되는 조사가 있을 때만 (헤더 바로 아래) */}
+      {surveys && surveys.length > 0 && (
+        <div className="g-detail-section">
+          <div className="g-sub-title">현장조사 기록 ({surveys.length})</div>
+          <div className="g-survey-list">
+            {surveys.map(s => (
+              <SurveyRecordRow key={s.properties.id} feature={s} onPhotoOpen={onPhotoOpen} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 업종 이력 — Supabase business_history (음식점 인허가) */}
+      {businessHistory && businessHistory.length > 0 && (
+        <BusinessHistorySection items={businessHistory} />
+      )}
 
       {/* 핵심 수치 */}
       <div className="g-detail-stats">
@@ -2340,6 +2501,255 @@ function BuildingDetailCard({ feature, zoningData, onClose, onOpenEum }) {
       <button className="g-eum-btn" onClick={onOpenEum}>
         🔗 토지이음에서 열람
       </button>
+    </div>
+  )
+}
+
+// ─── 업종 이력 (음식점 인허가) ─────────────────────────────────────
+// 업태별 아이콘. CSV 의 업태구분명 그대로 매칭.
+const BUSINESS_TYPE_ICONS = {
+  '한식':                       '🍚',
+  '중국식':                     '🥢',
+  '일식':                       '🍣',
+  '분식':                       '🍡',
+  '경양식':                     '🍝',
+  '호프/통닭':                  '🍺',
+  '통닭(치킨)':                 '🍗',
+  '까페':                       '☕',
+  '정종/대포집/소주방':         '🍶',
+  '식육(숯불구이)':             '🥩',
+  '외국음식전문점(인도,태국등)': '🌏',
+  '뷔페식':                     '🍽',
+  '김밥(도시락)':               '🍙',
+  '감성주점':                   '🍷',
+}
+
+function formatYearMonth(iso) {
+  if (!iso) return ''
+  // ISO 'YYYY-MM-DD' → 'YYYY.M' (앞 0 제거)
+  const [y, m] = iso.split('-')
+  if (!y || !m) return iso
+  return `${y}.${Number(m)}`
+}
+
+function BusinessHistorySection({ items }) {
+  const [showAllClosed, setShowAllClosed] = useState(false)
+  const active = items.filter(it => it.isActive)
+  const closed = items.filter(it => !it.isActive)
+  const CLOSED_COLLAPSE_THRESHOLD = 5
+  const collapsedClosed = closed.slice(0, CLOSED_COLLAPSE_THRESHOLD)
+  const visibleClosed = showAllClosed ? closed : collapsedClosed
+
+  return (
+    <div className="g-detail-section">
+      <div className="g-sub-title">업종 이력 ({items.length})</div>
+
+      {active.length > 0 && (
+        <div className="g-biz-group">
+          <div className="g-biz-group-label g-biz-group-label-active">
+            🟢 현재 영업 중 ({active.length})
+          </div>
+          <div className="g-biz-list">
+            {active.map(it => <BusinessHistoryRow key={it.id} item={it} />)}
+          </div>
+        </div>
+      )}
+
+      {closed.length > 0 && (
+        <div className="g-biz-group">
+          <div className="g-biz-group-label g-biz-group-label-closed">
+            🔴 폐업 ({closed.length})
+          </div>
+          <div className="g-biz-list">
+            {visibleClosed.map(it => <BusinessHistoryRow key={it.id} item={it} />)}
+          </div>
+          {closed.length > CLOSED_COLLAPSE_THRESHOLD && (
+            <button
+              type="button"
+              className="g-biz-more-btn"
+              onClick={() => setShowAllClosed(v => !v)}
+            >
+              {showAllClosed
+                ? '접기'
+                : `더 보기 (+${closed.length - CLOSED_COLLAPSE_THRESHOLD})`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BusinessHistoryRow({ item }) {
+  const icon = BUSINESS_TYPE_ICONS[item.type] || '🍽'
+  const opened = formatYearMonth(item.openedAt) || '?'
+  const closed = item.isActive ? '현재' : (formatYearMonth(item.closedAt) || '?')
+  return (
+    <div className="g-biz-row">
+      <span className="g-biz-icon" aria-hidden>{icon}</span>
+      <span className="g-biz-name">{item.name}</span>
+      <span className="g-biz-period">({opened} ~ {closed})</span>
+    </div>
+  )
+}
+
+// 단일 조사 기록 (건물 카드 안의 행 + 단독 마커 상세에서 공용)
+function SurveyRecordRow({ feature, expanded = false, onPhotoOpen }) {
+  const p = feature.properties || {}
+  const fields = describePayload(p.surveyType, p.payload)
+  const photos = (p.photoPaths || []).map(path => ({ path, url: getPhotoUrl(path) }))
+  const urls = photos.map(ph => ph.url)
+  return (
+    <div className="g-survey-rec">
+      <div className="g-survey-rec-head">
+        <span className={`g-survey-rec-type g-survey-rec-type-${p.surveyType}`}>
+          {TYPE_LABELS[p.surveyType] || p.surveyType}
+        </span>
+        <span className={`g-survey-rec-status g-survey-rec-status-${p.status}`}>
+          {STATUS_LABELS[p.status] || p.status}
+        </span>
+        <span className="g-survey-rec-date">{formatSurveyDate(p.createdAt)}</span>
+      </div>
+      {fields.length > 0 && (
+        <dl className="g-survey-rec-fields">
+          {fields.map(({ label, value }) => (
+            <div key={label} className="g-survey-rec-field">
+              <dt>{label}</dt><dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {p.surveyType === 'building' && (() => {
+        const ents = getEntranceLocations(p.payload)
+        return (
+          <div className="g-survey-rec-field">
+            <dt>건물 입구{ents.length > 1 && ` (${ents.length})`}</dt>
+            <dd>
+              {ents.length === 0
+                ? '미지정'
+                : ents.map((e, i) => (
+                    <div key={i}>{e.lat.toFixed(6)}, {e.lng.toFixed(6)}</div>
+                  ))}
+            </dd>
+          </div>
+        )
+      })()}
+      {p.memo && <p className="g-survey-rec-memo">{p.memo}</p>}
+      {photos.length > 0 && (
+        <div className="g-survey-rec-photos">
+          {photos.slice(0, expanded ? photos.length : 4).map(({ path, url }, i) => (
+            <button
+              key={path}
+              type="button"
+              className="g-survey-rec-photo"
+              onClick={() => onPhotoOpen?.(urls, i)}
+              aria-label={`사진 ${i + 1} 크게 보기`}
+            >
+              <img src={url} alt="조사 사진" loading="lazy" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function formatSurveyDate(iso) {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleString('ko-KR', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    })
+  } catch { return iso }
+}
+
+// 마커(점/도로) 클릭 시 우측 패널에 표시되는 단독 조사 상세 카드
+function SurveyDetailCard({ feature, onClose, onPhotoOpen }) {
+  const p = feature.properties || {}
+  const c = feature.geometry?.coordinates
+  return (
+    <div className="g-detail-card">
+      <div className="g-detail-header">
+        <div>
+          <h2 className="g-detail-name">{TYPE_LABELS[p.surveyType] || '조사'}</h2>
+          <p className="g-detail-address">
+            {c && c.length >= 2 ? `${c[1].toFixed(6)}, ${c[0].toFixed(6)}` : ''}
+          </p>
+        </div>
+        <button className="g-selected-close" onClick={onClose}>✕</button>
+      </div>
+      <div className="g-detail-section">
+        <SurveyRecordRow feature={feature} expanded onPhotoOpen={onPhotoOpen} />
+      </div>
+    </div>
+  )
+}
+
+// 사진 라이트박스 — 패널 모달 + prev/next + 터치 스와이프 + 키보드
+function PhotoLightbox({ urls, initialIndex = 0, onClose }) {
+  const [index, setIndex] = useState(initialIndex)
+  const touchStartRef = useRef(null)
+  const total = urls.length
+
+  const prev = useCallback(() => setIndex(i => (i - 1 + total) % total), [total])
+  const next = useCallback(() => setIndex(i => (i + 1) % total), [total])
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowLeft' && total > 1) prev()
+      else if (e.key === 'ArrowRight' && total > 1) next()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, prev, next, total])
+
+  const onTouchStart = (e) => { touchStartRef.current = e.touches[0].clientX }
+  const onTouchEnd = (e) => {
+    if (touchStartRef.current == null) return
+    const dx = e.changedTouches[0].clientX - touchStartRef.current
+    touchStartRef.current = null
+    if (total <= 1 || Math.abs(dx) < 40) return
+    if (dx > 0) prev()
+    else next()
+  }
+
+  return (
+    <div className="g-lightbox" onClick={onClose} role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="g-lightbox-close"
+        onClick={(e) => { e.stopPropagation(); onClose() }}
+        aria-label="닫기"
+      >✕</button>
+      {total > 1 && (
+        <>
+          <button
+            type="button"
+            className="g-lightbox-nav g-lightbox-prev"
+            onClick={(e) => { e.stopPropagation(); prev() }}
+            aria-label="이전 사진"
+          >‹</button>
+          <button
+            type="button"
+            className="g-lightbox-nav g-lightbox-next"
+            onClick={(e) => { e.stopPropagation(); next() }}
+            aria-label="다음 사진"
+          >›</button>
+        </>
+      )}
+      <div
+        className="g-lightbox-stage"
+        onClick={(e) => e.stopPropagation()}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        <img src={urls[index]} alt={`사진 ${index + 1} / ${total}`} />
+      </div>
+      {total > 1 && (
+        <div className="g-lightbox-counter">{index + 1} / {total}</div>
+      )}
     </div>
   )
 }

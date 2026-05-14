@@ -63,6 +63,46 @@
 }
 .g-layer-btn.active .g-layer-desc { color: #ddd; }
 
+/* ── 현장조사 sub-toggle (건물/점/도로) ── */
+.g-survey-subtoggles {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  margin-bottom: 2px;
+  padding: 0 2px;
+  flex-wrap: wrap;
+}
+.g-survey-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 9px;
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  color: #888;
+  cursor: pointer;
+  border-radius: 999px;
+  font-family: inherit;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  --chip-color: #888;
+}
+.g-survey-chip:hover { border-color: #999; color: #333; }
+.g-survey-chip.on {
+  border-color: var(--chip-color);
+  color: #111;
+  background: #fff;
+}
+.g-survey-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ddd;
+  flex-shrink: 0;
+}
+.g-survey-chip.on .g-survey-dot { background: var(--chip-color); }
+
 @media (max-width: 768px) {
   .g-layer-selector { padding: 14px 18px 4px; }
 }

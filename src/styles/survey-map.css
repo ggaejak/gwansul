@@ -591,6 +591,12 @@
   border-color: #ddd;
   cursor: not-allowed;
 }
+.sv-entrance-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
 .sv-entrance-row {
   display: flex;
   align-items: center;

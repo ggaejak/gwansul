@@ -57,17 +57,32 @@ export const ROAD_WIDTH_LABEL = Object.fromEntries(
 
 // ─── point.category ──────────────────────────────────────────
 export const POINT_CATEGORY_OPTIONS = [
-  { code: 'public_toilet', label: '공공화장실' },
-  { code: 'smoking_area',  label: '흡연구역(꽁초밀집)' },
-  { code: 'noise_spot',    label: '소음 특이지점' },
-  { code: 'odor_spot',     label: '냄새 특이지점' },
-  { code: 'other',         label: '기타' },
+  { code: 'public_toilet',  label: '공공화장실' },
+  { code: 'private_toilet', label: '민간화장실' },
+  { code: 'smoking_area',   label: '흡연구역(꽁초밀집)' },
+  { code: 'noise_spot',     label: '소음 특이지점' },
+  { code: 'odor_spot',      label: '냄새 특이지점' },
+  { code: 'other',          label: '기타' },
 ]
 export const POINT_CATEGORY_LABEL = Object.fromEntries(
   POINT_CATEGORY_OPTIONS.map(o => [o.code, o.label]),
 )
 
 // ─── 통합 헬퍼 ───────────────────────────────────────────────
+/**
+ * 건물 조사 payload 에서 입구 좌표 배열 반환.
+ *  - 신규: payload.entrance_locations = [{lat,lng}, ...]
+ *  - 레거시 단일: payload.entrance_location = {lat,lng}
+ * 둘 다 없으면 []. 무효 항목(좌표 누락)은 걸러냄.
+ */
+export function getEntranceLocations(payload) {
+  if (!payload) return []
+  const raw = Array.isArray(payload.entrance_locations)
+    ? payload.entrance_locations
+    : (payload.entrance_location ? [payload.entrance_location] : [])
+  return raw.filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number')
+}
+
 /**
  * 조사 1 건의 payload 를 사람이 읽을 수 있는 [{label, value}] 로 변환.
  * survey_type 마다 다른 키 → 같은 표시 형식.

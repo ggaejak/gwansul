@@ -13,7 +13,7 @@
 //   기존 photo_paths 의 _N.jpg 에서 가장 큰 N 을 찾아 N+1 부터 부여 →
 //   삭제로 인한 hole 이 있어도 충돌 안 남.
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   generateSurveyId,
   makePhotoPath,
@@ -30,6 +30,7 @@ import {
   NIGHT_BRIGHTNESS_OPTIONS,
   ROAD_WIDTH_OPTIONS,
   POINT_CATEGORY_OPTIONS,
+  getEntranceLocations,
 } from '../../lib/surveyLabels'
 
 
@@ -56,18 +57,27 @@ export default function SurveyForm({
   initialFeature, // edit 모드 prefill
   onClose,
   onSaved,
-  onRequestEntrancePick, // () => Promise<{lng,lat} | null>
+  onStartEntrancePick,   // (onPick) => void — 콜백 등록 + 픽 모드 진입
+  onStopEntrancePick,    // () => void — 픽 모드 종료
+  onEntrancesChange,     // (locations[]) => void — 입구 배열 변경 시 부모 broadcast (지도 미리보기용)
   pickingEntrance,       // boolean — 부모가 입구 지정 모드일 때 폼을 화면 밖으로
 }) {
   // ─── 초기값 ─────────────────────────────────────────────
   const initialPayload = initialFeature?.properties?.payload || {}
   const initialMemo    = initialFeature?.properties?.memo || ''
   const initialPaths   = initialFeature?.properties?.photoPaths || []
-  const initialEntrance = initialPayload.entrance_location || null
+  // 입구 좌표 — 신규는 entrance_locations 배열, 레거시는 entrance_location 단일 자동 흡수
+  const initialEntrances = getEntranceLocations(initialPayload)
 
   const [payload, setPayload] = useState(initialPayload)
   const [memo,    setMemo]    = useState(initialMemo)
-  const [entranceLocation, setEntranceLocation] = useState(initialEntrance)
+  const [entranceLocations, setEntranceLocations] = useState(initialEntrances)
+
+  // 부모(SurveyMap) 에 현재 입구 배열을 broadcast — 지도 위 빨간 문 미리보기 마커용.
+  // 폼이 마운트되는 순간(initialEntrances)과 이후 추가/삭제 모두 반영.
+  useEffect(() => {
+    onEntrancesChange?.(entranceLocations)
+  }, [entranceLocations, onEntrancesChange])
   const [existingPhotos, setExistingPhotos] = useState(
     initialPaths.map(path => ({ path, url: getPhotoUrl(path) })),
   )
@@ -182,11 +192,19 @@ export default function SurveyForm({
     })
   }
 
-  // ─── 입구 위치 픽 ─────────────────────────────────────────
-  async function handlePickEntrance() {
-    if (!onRequestEntrancePick) return
-    const loc = await onRequestEntrancePick()
-    if (loc) setEntranceLocation({ lng: loc.lng, lat: loc.lat })
+  // ─── 입구 위치 픽 (연속 모드) ─────────────────────────────
+  // 모드 진입 후 사용자가 지도에서 점을 여러 개 찍을 수 있음.
+  // 각 픽마다 onPick 콜백이 호출되어 배열에 추가.
+  // 모드 종료는 부모(SurveyMap)의 "완료" 버튼 또는 onStopEntrancePick().
+  function handleStartEntrancePick() {
+    if (!onStartEntrancePick) return
+    onStartEntrancePick(({ lng, lat }) => {
+      setEntranceLocations(prev => [...prev, { lng, lat }])
+    })
+  }
+
+  function handleRemoveEntrance(index) {
+    setEntranceLocations(prev => prev.filter((_, i) => i !== index))
   }
 
   // ─── 저장 ─────────────────────────────────────────────────
@@ -212,17 +230,18 @@ export default function SurveyForm({
       }
       const finalPhotoPaths = [...existingPaths, ...newPaths]
 
-      // entrance_location: 지정 시에만 payload 에 포함 (null 명시 X)
+      // entrance_locations: 한 개 이상 있을 때만 payload 에 포함.
       // payload state 는 initialPayload 복사본이라 미터치 시 옛 값이 남아있을 수 있어
-      // 항상 entranceLocation state 기준으로 재구성.
+      // 항상 entranceLocations state 기준으로 재구성. 레거시 단일 키도 함께 제거.
       const finalPayload = { ...payload }
-      if (entranceLocation) {
-        finalPayload.entrance_location = {
-          lng: entranceLocation.lng,
-          lat: entranceLocation.lat,
-        }
+      delete finalPayload.entrance_location
+      if (entranceLocations.length > 0) {
+        finalPayload.entrance_locations = entranceLocations.map(p => ({
+          lng: p.lng,
+          lat: p.lat,
+        }))
       } else {
-        delete finalPayload.entrance_location
+        delete finalPayload.entrance_locations
       }
 
       // 2) DB
@@ -486,36 +505,43 @@ export default function SurveyForm({
             </div>
           </div>
 
-          {/* ── 건물 — 입구 위치 (선택) ── */}
+          {/* ── 건물 — 입구 위치 (선택, 여러 개 가능) ── */}
           {surveyType === 'building' && (
             <div className="sv-form-field">
               <div className="sv-form-label">
                 건물 입구 위치
-                <span className="sv-form-label-aux">선택</span>
+                <span className="sv-form-label-aux">
+                  선택{entranceLocations.length > 0 && ` · ${entranceLocations.length}개`}
+                </span>
               </div>
-              {entranceLocation ? (
-                <div className="sv-entrance-row">
-                  <div className="sv-entrance-coords">
-                    ✓ {entranceLocation.lat.toFixed(6)}, {entranceLocation.lng.toFixed(6)}
-                  </div>
-                  <button
-                    type="button"
-                    className="sv-entrance-clear"
-                    onClick={() => setEntranceLocation(null)}
-                  >
-                    지우기
-                  </button>
+              {entranceLocations.length > 0 && (
+                <div className="sv-entrance-list">
+                  {entranceLocations.map((loc, i) => (
+                    <div key={`${loc.lat},${loc.lng},${i}`} className="sv-entrance-row">
+                      <div className="sv-entrance-coords">
+                        ✓ {i + 1}. {loc.lat.toFixed(6)}, {loc.lng.toFixed(6)}
+                      </div>
+                      <button
+                        type="button"
+                        className="sv-entrance-clear"
+                        onClick={() => handleRemoveEntrance(i)}
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  className="sv-entrance-pick"
-                  onClick={handlePickEntrance}
-                  disabled={!onRequestEntrancePick || pickingEntrance}
-                >
-                  지도에서 입구 선택
-                </button>
               )}
+              <button
+                type="button"
+                className="sv-entrance-pick"
+                onClick={handleStartEntrancePick}
+                disabled={!onStartEntrancePick || pickingEntrance}
+              >
+                {entranceLocations.length > 0
+                  ? '+ 지도에서 입구 추가'
+                  : '지도에서 입구 선택'}
+              </button>
             </div>
           )}
 

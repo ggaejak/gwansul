@@ -26,7 +26,7 @@ import {
 import { useCurrentLocation } from '../../hooks/useCurrentLocation'
 import CurrentLocationMarker from './CurrentLocationMarker'
 import LocateButton from './LocateButton'
-import SurveyMarkers from './SurveyMarkers'
+import SurveyMarkers, { DraftEntranceMarkers } from './SurveyMarkers'
 import SurveyDetailSheet from './SurveyDetailSheet'
 import SurveyForm from './SurveyForm'
 import TypeSelectPicker from './TypeSelectPicker'
@@ -121,8 +121,14 @@ export default function SurveyMap() {
   const [selected,  setSelected]  = useState(null)   // 마커 클릭 → 상세 시트
   const [formState, setFormState] = useState(null)   // 입력/수정 폼 상태
   const [pickerState, setPickerState] = useState(null) // 빈 곳 탭 → 유형 선택
+  // 입구 픽 모드 — 한 번 진입하면 여러 점을 연속으로 찍을 수 있고
+  // 사용자가 "완료" 누를 때까지 활성. 콜백 패턴(Promise X) 으로 갱신.
   const [entrancePickActive, setEntrancePickActive] = useState(false)
-  const entranceResolverRef = useRef(null)
+  const [entrancePickedCount, setEntrancePickedCount] = useState(0)
+  const entranceCallbackRef = useRef(null)
+  // 폼이 들고 있는 현재 입구 좌표 배열. 저장 전 미리보기(빨간 문 마커)용.
+  // SurveyForm 의 entranceLocations 가 변할 때마다 broadcast 됨.
+  const [draftEntrances, setDraftEntrances] = useState([])
   const [toast, setToast] = useState(null)
   const toastTimerRef = useRef(null)
 
@@ -164,25 +170,19 @@ export default function SurveyMap() {
     toastTimerRef.current = setTimeout(() => setToast(null), 4000)
   }
 
-  // ─── 입구 위치 픽 ─────────────────────────────────────────
-  // SurveyForm 에서 호출 → 다음 지도 클릭 좌표를 Promise 로 반환.
-  // 취소 시 null 반환.
-  function requestEntrancePick() {
-    return new Promise(resolve => {
-      // 이전 요청이 남아있으면 null 로 종료 (이중 호출 방지)
-      if (entranceResolverRef.current) {
-        entranceResolverRef.current(null)
-      }
-      entranceResolverRef.current = resolve
-      setEntrancePickActive(true)
-    })
+  // ─── 입구 위치 픽 (연속 모드) ─────────────────────────────
+  // SurveyForm 이 onPick 콜백을 등록 → 모드 진입.
+  // 지도 탭마다 onPick 이 호출되어 좌표가 누적됨.
+  // 사용자가 배너의 "완료" 누를 때까지 모드 유지.
+  function startEntrancePick(onPick) {
+    entranceCallbackRef.current = onPick
+    setEntrancePickedCount(0)
+    setEntrancePickActive(true)
   }
 
-  function finishEntrancePick(loc) {
+  function stopEntrancePick() {
+    entranceCallbackRef.current = null
     setEntrancePickActive(false)
-    const resolver = entranceResolverRef.current
-    entranceResolverRef.current = null
-    resolver?.(loc)
   }
 
   // 조사 데이터 의존 키 — 데이터 갱신 시 강제 재렌더.
@@ -219,9 +219,11 @@ export default function SurveyMap() {
           onClick={(e) => {
             const { lng, lat } = e.latlng
 
-            // 입구 지정 모드 — 폼이 떠 있어도 우선 처리
+            // 입구 지정 모드 — 폼이 떠 있어도 우선 처리.
+            // 콜백 호출 후 모드 유지 (연속 픽). 종료는 배너 "완료" 버튼.
             if (entrancePickActive) {
-              finishEntrancePick({ lng, lat })
+              entranceCallbackRef.current?.({ lng, lat })
+              setEntrancePickedCount(c => c + 1)
               return
             }
 
@@ -255,6 +257,9 @@ export default function SurveyMap() {
             onSelect={setSelected}
           />
         )}
+
+        {/* 폼이 떠 있는 동안 편집 중인 입구를 빨간 문 마커로 즉시 미리보기 */}
+        {formState && <DraftEntranceMarkers locations={draftEntrances} />}
 
         {/* 현재 위치 */}
         <CurrentLocationMarker position={position} accuracy={accuracy} />
@@ -333,26 +338,35 @@ export default function SurveyMap() {
           location={formState.location}
           building={formState.building}
           initialFeature={formState.initialFeature}
-          onClose={() => setFormState(null)}
+          onClose={() => {
+            setFormState(null)
+            setDraftEntrances([])
+          }}
           onSaved={async () => {
             showToast(formState.mode === 'edit' ? '수정 완료' : '저장 완료')
+            setDraftEntrances([])
             await refreshSurveys()
           }}
-          onRequestEntrancePick={requestEntrancePick}
+          onStartEntrancePick={startEntrancePick}
+          onStopEntrancePick={stopEntrancePick}
+          onEntrancesChange={setDraftEntrances}
           pickingEntrance={entrancePickActive}
         />
       )}
 
-      {/* 입구 지정 모드 안내 배너 */}
+      {/* 입구 지정 모드 안내 배너 — 여러 점 연속 픽 가능 */}
       {entrancePickActive && (
         <div className="sv-entrance-banner" role="status">
-          <span className="sv-entrance-banner-msg">건물 입구 위치를 탭해주세요</span>
+          <span className="sv-entrance-banner-msg">
+            건물 입구 위치를 탭해주세요 (여러 번 가능)
+            {entrancePickedCount > 0 && ` · ${entrancePickedCount}개 추가됨`}
+          </span>
           <button
             type="button"
             className="sv-entrance-banner-cancel"
-            onClick={() => finishEntrancePick(null)}
+            onClick={stopEntrancePick}
           >
-            취소
+            완료
           </button>
         </div>
       )}

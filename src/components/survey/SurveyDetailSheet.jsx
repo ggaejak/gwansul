@@ -14,6 +14,7 @@ import {
   STATUS_LABELS,
   TYPE_LABELS,
   describePayload,
+  getEntranceLocations,
 } from '../../lib/surveyLabels'
 
 function formatDate(iso) {
@@ -121,16 +122,21 @@ export default function SurveyDetailSheet({ feature, onClose, onEdit, onDelete }
             <dd className="sv-sheet-coords">{formatLatLng(feature.geometry)}</dd>
           </div>
 
-          {surveyType === 'building' && (
-            <div className="sv-sheet-row sv-sheet-row-aux">
-              <dt>건물 입구</dt>
-              <dd className="sv-sheet-coords">
-                {p.payload?.entrance_location
-                  ? `${p.payload.entrance_location.lat.toFixed(6)}, ${p.payload.entrance_location.lng.toFixed(6)}`
-                  : '미지정'}
-              </dd>
-            </div>
-          )}
+          {surveyType === 'building' && (() => {
+            const ents = getEntranceLocations(p.payload)
+            return (
+              <div className="sv-sheet-row sv-sheet-row-aux">
+                <dt>건물 입구{ents.length > 1 && ` (${ents.length})`}</dt>
+                <dd className="sv-sheet-coords">
+                  {ents.length === 0
+                    ? '미지정'
+                    : ents.map((e, i) => (
+                        <div key={i}>{e.lat.toFixed(6)}, {e.lng.toFixed(6)}</div>
+                      ))}
+                </dd>
+              </div>
+            )
+          })()}
 
           {status === 'rejected' && p.rejectReason && (
             <div className="sv-sheet-reject">

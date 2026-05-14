@@ -19,6 +19,7 @@
 import { Fragment } from 'react'
 import { Marker } from 'react-leaflet'
 import L from 'leaflet'
+import { getEntranceLocations } from '../../lib/surveyLabels'
 
 const TYPE_COLOR = {
   building: '#1e88e5',  // 파랑
@@ -120,17 +121,52 @@ function getEntranceIcon() {
   return ENTRANCE_ICON
 }
 
+// 폼 내부에서 편집 중인 (아직 저장 전) 입구 좌표를 즉시 빨간 문 아이콘으로 표시.
+// SurveyForm 의 entranceLocations 가 변할 때마다 SurveyMap 이 broadcast.
+export function DraftEntranceMarkers({ locations }) {
+  if (!locations || locations.length === 0) return null
+  return locations.map((ent, i) => (
+    <Marker
+      key={`draft-ent-${i}`}
+      position={[ent.lat, ent.lng]}
+      icon={getEntranceIcon()}
+      interactive={false}
+      keyboard={false}
+    />
+  ))
+}
+
+// 건물 조사 features 중 입구 좌표가 있는 것만 빨간 문 보조 마커로.
+// 한 조사에 입구가 여러 개일 수 있으므로 각각 별도 마커로 렌더.
+// GIS 페이지처럼 메인 마커를 폴리곤 하이라이트로 대체하는 경우에 단독 사용.
+export function EntranceMarkers({ features }) {
+  if (!features || features.length === 0) return null
+  const markers = []
+  for (const f of features) {
+    if (f.properties?.surveyType !== 'building') continue
+    const ents = getEntranceLocations(f.properties?.payload)
+    ents.forEach((ent, i) => {
+      markers.push(
+        <Marker
+          key={`${f.properties.id}-ent-${i}`}
+          position={[ent.lat, ent.lng]}
+          icon={getEntranceIcon()}
+          interactive={false}
+          keyboard={false}
+        />,
+      )
+    })
+  }
+  return markers
+}
+
 export default function SurveyMarkers({ features, onSelect }) {
   if (!features || features.length === 0) return null
   return features.map(f => {
     const coords = f?.geometry?.coordinates
     if (!coords || coords.length < 2) return null
-    const type   = f.properties.surveyType
-    const ent    = f.properties.payload?.entrance_location
-    const hasEntrance = type === 'building'
-      && ent
-      && typeof ent.lng === 'number'
-      && typeof ent.lat === 'number'
+    const type = f.properties.surveyType
+    const entrances = type === 'building' ? getEntranceLocations(f.properties.payload) : []
     return (
       <Fragment key={f.properties.id}>
         <Marker
@@ -144,14 +180,15 @@ export default function SurveyMarkers({ features, onSelect }) {
             },
           }}
         />
-        {hasEntrance && (
+        {entrances.map((ent, i) => (
           <Marker
+            key={`ent-${i}`}
             position={[ent.lat, ent.lng]}
             icon={getEntranceIcon()}
             interactive={false}
             keyboard={false}
           />
-        )}
+        ))}
       </Fragment>
     )
   })
