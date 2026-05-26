@@ -23,19 +23,43 @@ import { fetchBusinessHistoryByBuilding } from '../data/businessHistory'
 import SurveyMarkers, { EntranceMarkers } from '../components/survey/SurveyMarkers'
 import { TYPE_LABELS, STATUS_LABELS, describePayload, getEntranceLocations } from '../lib/surveyLabels'
 import landmarksData from '../gis/data/junggu-landmarks.json'
-import surveyAreaData from '../gis/data/survey-area.json'
+import hwanghakAreaData from '../gis/data/hwanghak-area.json'
+import sindang5AreaData from '../gis/data/sindang5-area.json'
 import parksData from '../gis/data/junggu-parks.json'
 import 'leaflet/dist/leaflet.css'
 import '../styles/gis.css'
 import '../styles/gis-articles.css'
 
-// 답사 영역 중심 (src/gis/data/survey-area.json 폴리곤의 무게중심).
+// 답사 영역 중심 (황학동 + 신당5동 폴리곤 합의 무게중심).
 // 이 값은 다음 5 곳에서 동시에 사용됨:
 //   - MapContainer 의 초기 center
 //   - PulseGuide 의 안내 위치 + 클릭 시 setClickedPoint
 //   - 초기 fetchBuildingsNearPoint / fetchZoningIntersect 의 좌표
 const CENTER = [37.56530, 127.01676]
 const BOUNDS = [[37.53, 126.95], [37.60, 127.04]]
+
+// ─── 답사 영역 (황학동 / 신당5동) ──────────────────────────────
+const HWANGHAK_FEATURE = hwanghakAreaData.features[0]
+const SINDANG5_FEATURE = sindang5AreaData.features[0]
+const DONG_META = {
+  hwanghak: { id: 'hwanghak', name: '황학동', color: '#2563eb', feature: HWANGHAK_FEATURE },
+  sindang5: { id: 'sindang5', name: '신당5동', color: '#dc2626', feature: SINDANG5_FEATURE },
+}
+
+// 경량 점-폴리곤 판정 (ray casting). 폴리곤은 단일 외곽링.
+function pointInPolygonFeature(lng, lat, feature) {
+  if (!feature) return false
+  const coords = feature.geometry.coordinates[0]
+  let inside = false
+  for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+    const xi = coords[i][0], yi = coords[i][1]
+    const xj = coords[j][0], yj = coords[j][1]
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
+}
 
 // ─── 편의시설 카테고리 ──────────────────────────────────────────
 const AMENITY_CATS = [
@@ -209,6 +233,9 @@ export default function GisPage() {
   const [demoAgeFilter, setDemoAgeFilter] = useState(null) // null=전체, 'age_0_19' 등
   const [missingFilter, setMissingFilter] = useState(null) // null=용적률색상, 'vlRat','grndFlrCnt','platArea','totArea'
   const [showSurveyArea, setShowSurveyArea] = useState(false)
+  // 답사 영역에서 특정 동을 선택하면 폴리곤 안의 데이터로 좌측 분석 패널을 채움.
+  // 'hwanghak' | 'sindang5' | null
+  const [selectedDong, setSelectedDong] = useState(null)
   const [showParks, setShowParks] = useState(false)
   // 현장조사 레이어 — visibleSection === 'survey' 일 때만 의미 있음.
   // 3 종 sub-toggle 독립적으로 on/off.
@@ -346,44 +373,95 @@ export default function GisPage() {
     return () => { panel.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
   }, [loading, clickedPoint])
 
+  // 답사 영역 표시가 꺼지면 동 선택도 해제
+  useEffect(() => {
+    if (!showSurveyArea && selectedDong) setSelectedDong(null)
+  }, [showSurveyArea, selectedDong])
+
+  // 선택된 동 폴리곤 + 파생 값(centroid, 면적, bbox)
+  const selectedDongFeature = selectedDong ? DONG_META[selectedDong].feature : null
+
+  const dongCentroid = useMemo(() => {
+    if (!selectedDongFeature) return null
+    try { return turf.centroid(selectedDongFeature).geometry.coordinates } catch { return null }
+  }, [selectedDongFeature])
+
+  const dongAreaSqKm = useMemo(() => {
+    if (!selectedDongFeature) return 0
+    try { return turf.area(selectedDongFeature) / 1e6 } catch { return 0 }
+  }, [selectedDongFeature])
+
+  // 동 모드는 폴리곤 안인지로 필터. 원 모드는 기존 반경 기준.
   const filtered = useMemo(() => {
-    if (!buildingData || !clickedPoint) return []
+    if (!buildingData) return []
+    if (selectedDongFeature) {
+      return buildingData.features.filter(f => {
+        const c = getCentroid(f)
+        if (!c) return false
+        return pointInPolygonFeature(c[0], c[1], selectedDongFeature)
+      })
+    }
+    if (!clickedPoint) return []
     const [clat, clng] = clickedPoint
     return buildingData.features.filter(f => {
       const c = getCentroid(f)
       if (!c) return false
       return fastDistM(clat, clng, c[1], c[0]) <= radius
     })
-  }, [buildingData, clickedPoint, radius])
+  }, [buildingData, clickedPoint, radius, selectedDongFeature])
 
-  // 반경 내 대중교통 필터링
+  // 반경/폴리곤 내 대중교통 필터링
   const filteredTransit = useMemo(() => {
-    if (!transitData || !clickedPoint) return { busStops: [], subwayLines: {} }
-    const [clat, clng] = clickedPoint
+    if (!transitData) return { busStops: [], subwayLines: {} }
 
-    const busStops = transitData.busStops.filter(s =>
-      fastDistM(clat, clng, s.lat, s.lng) <= radius
-    )
+    const inside = selectedDongFeature
+      ? (lng, lat) => pointInPolygonFeature(lng, lat, selectedDongFeature)
+      : (clickedPoint
+          ? (lng, lat) => fastDistM(clickedPoint[0], clickedPoint[1], lat, lng) <= radius
+          : null)
+    if (!inside) return { busStops: [], subwayLines: {} }
+
+    const busStops = transitData.busStops.filter(s => inside(s.lng, s.lat))
 
     const subwayLines = {}
     for (const [line, info] of Object.entries(transitData.subwayLines)) {
-      const stations = info.stations.filter(s =>
-        fastDistM(clat, clng, s.lat, s.lng) <= radius
-      )
+      const stations = info.stations.filter(s => inside(s.lng, s.lat))
       if (stations.length > 0) {
         subwayLines[line] = { color: info.color, stations }
       }
     }
 
     return { busStops, subwayLines }
-  }, [transitData, clickedPoint, radius])
+  }, [transitData, clickedPoint, radius, selectedDongFeature])
 
   // 편의시설 API 호출 (디바운스 500ms)
+  // - 원 모드: clickedPoint + radius 기준
+  // - 동 모드: 폴리곤 centroid + 폴리곤 외접원 반경으로 fetch 후 폴리곤 내부만 추림
   useEffect(() => {
-    if (!clickedPoint || !KAKAO_KEY) return
-    const key = `${clickedPoint[0].toFixed(4)},${clickedPoint[1].toFixed(4)},${radius}`
-    if (amenityCacheRef.current[key]) {
-      setAmenities(amenityCacheRef.current[key])
+    if (!KAKAO_KEY) return
+    let centerLat, centerLng, queryRadius, cacheKey
+    if (selectedDongFeature && dongCentroid) {
+      centerLng = dongCentroid[0]
+      centerLat = dongCentroid[1]
+      const ring = selectedDongFeature.geometry.coordinates[0]
+      let maxD = 0
+      for (const [lng, lat] of ring) {
+        const d = fastDistM(centerLat, centerLng, lat, lng)
+        if (d > maxD) maxD = d
+      }
+      queryRadius = Math.ceil(maxD + 50)
+      cacheKey = `dong-${selectedDong}`
+    } else if (clickedPoint) {
+      centerLat = clickedPoint[0]
+      centerLng = clickedPoint[1]
+      queryRadius = radius
+      cacheKey = `${clickedPoint[0].toFixed(4)},${clickedPoint[1].toFixed(4)},${radius}`
+    } else {
+      return
+    }
+
+    if (amenityCacheRef.current[cacheKey]) {
+      setAmenities(amenityCacheRef.current[cacheKey])
       return
     }
     setAmenityLoading(true)
@@ -391,10 +469,13 @@ export default function GisPage() {
       try {
         const results = {}
         const promises = AMENITY_CATS.map(async (cat) => {
-          results[cat.code] = await fetchCategoryPlaces(cat.code, clickedPoint[1], clickedPoint[0], radius)
+          const places = await fetchCategoryPlaces(cat.code, centerLng, centerLat, queryRadius)
+          results[cat.code] = selectedDongFeature
+            ? places.filter(p => pointInPolygonFeature(p.lng, p.lat, selectedDongFeature))
+            : places
         })
         await Promise.all(promises)
-        amenityCacheRef.current[key] = results
+        amenityCacheRef.current[cacheKey] = results
         setAmenities(results)
       } catch (e) {
         console.error('편의시설 로드 실패', e)
@@ -403,7 +484,7 @@ export default function GisPage() {
       }
     }, 500)
     return () => clearTimeout(timer)
-  }, [clickedPoint, radius])
+  }, [clickedPoint, radius, selectedDongFeature, selectedDong, dongCentroid])
 
   const toggleCat = useCallback((code) => {
     setEnabledCats(prev => {
@@ -413,35 +494,59 @@ export default function GisPage() {
     })
   }, [])
 
-  // 반경 내 용도지역 필터링 (교차 판정)
+  // 용도지역 필터링 (교차 판정)
   const filteredZoning = useMemo(() => {
-    if (!zoningData || !clickedPoint) return []
+    if (!zoningData) return []
+    if (selectedDongFeature) {
+      return zoningData.features.filter(f => {
+        try { return turf.booleanIntersects(selectedDongFeature, f) } catch { return false }
+      })
+    }
+    if (!clickedPoint) return []
     const circle = turf.circle([clickedPoint[1], clickedPoint[0]], radius / 1000, { units: 'kilometers', steps: 32 })
     return zoningData.features.filter(f => {
       try { return turf.booleanIntersects(circle, f) } catch { return false }
     })
-  }, [zoningData, clickedPoint, radius])
+  }, [zoningData, clickedPoint, radius, selectedDongFeature])
 
-  // 반경 내 상권 필터링
+  // 상권 필터링
   const filteredCommerce = useMemo(() => {
-    if (!commerceData || !clickedPoint) return []
+    if (!commerceData) return []
+    if (selectedDongFeature) {
+      return commerceData.areas.filter(a => pointInPolygonFeature(a.lng, a.lat, selectedDongFeature))
+    }
+    if (!clickedPoint) return []
     const [clat, clng] = clickedPoint
     return commerceData.areas.filter(a =>
       fastDistM(clat, clng, a.lat, a.lng) <= radius
     )
-  }, [commerceData, clickedPoint, radius])
+  }, [commerceData, clickedPoint, radius, selectedDongFeature])
 
-  // 반경 내 인구 점 필터링
+  // 인구 점 필터링
   const filteredDots = useMemo(() => {
-    if (!demoData || !clickedPoint) return []
+    if (!demoData) return []
+    if (selectedDongFeature) {
+      return demoData.dots.filter(d => pointInPolygonFeature(d.lng, d.lat, selectedDongFeature))
+    }
+    if (!clickedPoint) return []
     const [clat, clng] = clickedPoint
     return demoData.dots.filter(d =>
       fastDistM(clat, clng, d.lat, d.lng) <= radius
     )
-  }, [demoData, clickedPoint, radius])
+  }, [demoData, clickedPoint, radius, selectedDongFeature])
 
-  // 역사적 랜드마크 필터링 (반경 기준, 항상 최대 1500m)
+  // 역사적 랜드마크 필터링
+  // - 동 모드: 폴리곤 안 랜드마크만 (dist=0 으로 표시해 1500m 컷을 통과시킴),
+  //           폴리곤 밖은 centroid 기준 실제 거리.
+  // - 원 모드: clickedPoint 기준 실제 거리.
   const filteredLandmarks = useMemo(() => {
+    if (selectedDongFeature) {
+      const [clng, clat] = dongCentroid || [127.01676, 37.5653]
+      return landmarksData.landmarks.map(lm => {
+        const inside = pointInPolygonFeature(lm.lng, lm.lat, selectedDongFeature)
+        return { ...lm, dist: inside ? 0 : Math.round(fastDistM(clat, clng, lm.lat, lm.lng)) }
+      }).sort((a, b) => a.dist - b.dist)
+    }
     if (!clickedPoint) return landmarksData.landmarks
     const R = 6371000
     const [lat, lng] = clickedPoint
@@ -451,7 +556,7 @@ export default function GisPage() {
       const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat * Math.PI / 180) * Math.cos(lm.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2
       return { ...lm, dist: Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) }
     }).sort((a, b) => a.dist - b.dist)
-  }, [clickedPoint])
+  }, [clickedPoint, selectedDongFeature, dongCentroid])
 
   // 반경 내 건물 PNU Set
   const filteredSet = useMemo(() => {
@@ -521,20 +626,20 @@ export default function GisPage() {
   // 원 밖 건물 스타일
   const OUTSIDE_STYLE = { fillColor: '#ddd', fillOpacity: 0.35, weight: 0.2, color: 'rgba(0,0,0,0.04)' }
 
-  // 지도 스타일 — visibleSection + 원 안/밖 구분
+  // 지도 스타일 — visibleSection + 원/폴리곤 안/밖 구분
   const buildingStyle = useCallback((feature) => {
-    // 첫 진입(클릭 전 + 반경 분석 모드) — 색 분류를 모두 숨겨
+    // 첫 진입(클릭 전 + 반경 분석 모드 + 동 미선택) — 색 분류를 모두 숨겨
     // 펄스 안내(PulseGuide)에 시선이 집중되게 한다.
-    // 클릭하면 즉시 visibleSection 에 따른 색이 활성화됨.
-    // 사용자가 LayerSelector 에서 active 항목을 다시 눌러 'none' 인 경우도
-    // 같은 처리 (시각화 모두 끔). ZoningLayer/LandmarkLayer 등 다른
-    // visibleSection 의존 레이어들은 자체 분기에서 자동으로 숨겨진다.
-    if (visibleSection === 'none' || (circleEnabled && !clickedPoint)) {
+    if (visibleSection === 'none' || (circleEnabled && !clickedPoint && !selectedDong)) {
       return { fillColor: 'transparent', fillOpacity: 0, weight: 0, color: 'transparent' }
     }
 
-    // 원 비활성 → 전체 건물에 색상 적용 (안/밖 구분 없음)
-    const inside = !circleEnabled || !clickedPoint || filteredSet.has(feature.properties.pnu)
+    // 동 모드: 폴리곤 안 건물만 색상, 밖은 흐리게
+    // 원 비활성: 전체 색상
+    // 원 활성: 반경 안만 색상
+    const inside = selectedDong
+      ? filteredSet.has(feature.properties.pnu)
+      : (!circleEnabled || !clickedPoint || filteredSet.has(feature.properties.pnu))
 
     if (visibleSection === 'history') {
       const year = getBuildYear(feature.properties)
@@ -577,7 +682,7 @@ export default function GisPage() {
       return { fillColor: '#e8e8e8', fillOpacity: 0.25, weight: 0.2, color: 'rgba(0,0,0,0.04)' }
     }
     return { fillColor: '#bbb', fillOpacity: 0.5, weight: 0.3, color: 'rgba(0,0,0,0.06)' }
-  }, [visibleSection, clickedPoint, filteredSet, ageFilterYear, circleEnabled, missingFilter, surveyTypes, surveyedPnuSet])
+  }, [visibleSection, clickedPoint, filteredSet, ageFilterYear, circleEnabled, missingFilter, surveyTypes, surveyedPnuSet, selectedDong])
 
   const showToast = useCallback((msg) => {
     setToast(msg)
@@ -721,15 +826,15 @@ export default function GisPage() {
             />
           )}
 
-          {!loading && mode === 'analysis' && !clickedPoint && circleEnabled && (
+          {!loading && mode === 'analysis' && !clickedPoint && circleEnabled && !selectedDong && (
             <div className="g-empty">
               <div className="g-empty-icon">⊕</div>
-              <p>지도에서 분석할 위치를<br />클릭하세요</p>
+              <p>지도에서 분석할 위치를<br />클릭하거나<br />답사 영역의 동을 선택하세요</p>
             </div>
           )}
 
           {/* 전체 보기 모드 — 시각화 토글 + (선택 건물 상세 / 안내) */}
-          {!loading && mode === 'analysis' && !circleEnabled && (
+          {!loading && mode === 'analysis' && !circleEnabled && !selectedDong && (
             <>
               <LayerSelector
                 value={visibleSection}
@@ -762,19 +867,41 @@ export default function GisPage() {
             </>
           )}
 
-          {!loading && mode === 'analysis' && clickedPoint && circleEnabled && (
+          {!loading && mode === 'analysis' && (selectedDong || (clickedPoint && circleEnabled)) && (
             <div className="g-sections">
+
+              {/* ── 분석 대상 표시 (동 모드일 때만) ── */}
+              {selectedDong && (
+                <div
+                  className="g-dong-banner"
+                  style={{ borderLeftColor: DONG_META[selectedDong].color }}
+                >
+                  <div className="g-dong-banner-row">
+                    <span className="g-dong-banner-dot" style={{ background: DONG_META[selectedDong].color }} />
+                    <span className="g-dong-banner-name">{DONG_META[selectedDong].name}</span>
+                    <span className="g-dong-banner-area">{dongAreaSqKm > 0 ? `${dongAreaSqKm.toFixed(3)} km²` : ''}</span>
+                    <button
+                      type="button"
+                      className="g-selected-close"
+                      onClick={() => setSelectedDong(null)}
+                      title="동 선택 해제"
+                    >✕</button>
+                  </div>
+                </div>
+              )}
 
               {/* ── Pedestrian Shed ── */}
               <section data-section="pedshed" className="g-sec active">
                 <div className="g-sec-header">
                   <h2 className="g-sec-title">Pedestrian Shed</h2>
-                  <p className="g-sec-desc">보행권역 · Catchment Area</p>
+                  <p className="g-sec-desc">{selectedDong ? '답사 영역 · 동 단위 분석' : '보행권역 · Catchment Area'}</p>
                 </div>
 
                 <div className="g-stats-row">
-                  <Stat label="반경 내 건물" value={filtered.length} />
-                  <Stat label="도보 시간" value={`~${Math.round(radius / 80)}분`} />
+                  <Stat label={selectedDong ? '영역 내 건물' : '반경 내 건물'} value={filtered.length} />
+                  {selectedDong
+                    ? <Stat label="영역 면적" value={`${dongAreaSqKm.toFixed(3)} km²`} />
+                    : <Stat label="도보 시간" value={`~${Math.round(radius / 80)}분`} />}
                 </div>
 
                 <div className="g-divider-thin" />
@@ -798,32 +925,34 @@ export default function GisPage() {
                 </div>
               </section>
 
-              {/* ── 슬라이더 (sticky 고정) ── */}
-              <div className="g-sticky-controls">
-                {circleEnabled && (
-                  <>
-                    <div className="g-slider-row">
-                      <span className="g-slider-value">{(radius / 1000).toFixed(2)} km</span>
-                      <input
-                        type="range"
-                        className="g-slider"
-                        min={100}
-                        max={1000}
-                        step={10}
-                        value={radius}
-                        onChange={e => setRadius(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="g-slider-labels">
-                      <span>0.10 km</span>
-                      <span>1.00 km</span>
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* ── 슬라이더 (sticky 고정) — 동 모드에서는 숨김 ── */}
+              {!selectedDong && (
+                <div className="g-sticky-controls">
+                  {circleEnabled && (
+                    <>
+                      <div className="g-slider-row">
+                        <span className="g-slider-value">{(radius / 1000).toFixed(2)} km</span>
+                        <input
+                          type="range"
+                          className="g-slider"
+                          min={100}
+                          max={1000}
+                          step={10}
+                          value={radius}
+                          onChange={e => setRadius(Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="g-slider-labels">
+                        <span>0.10 km</span>
+                        <span>1.00 km</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
-              {/* ── 선택된 건물 정보 (반경 분석 모드: 간략) ── */}
-              {selectedBuilding && circleEnabled && (
+              {/* ── 선택된 건물 정보 (반경/동 분석 공통 간략 표시) ── */}
+              {selectedBuilding && (circleEnabled || selectedDong) && (
                 <div className="g-selected-building">
                   <div className="g-selected-header">
                     <div className="g-selected-info">
@@ -910,7 +1039,14 @@ export default function GisPage() {
                   <h2 className="g-sec-title">Demographics</h2>
                   <p className="g-sec-desc">인구 데이터는 도시의 현재 상태를 이해하는 데 필수적입니다</p>
                 </div>
-                <DemographicsContent dots={filteredDots} demoData={demoData} radius={radius} ageFilter={demoAgeFilter} onAgeFilterChange={setDemoAgeFilter} />
+                <DemographicsContent
+                  dots={filteredDots}
+                  demoData={demoData}
+                  radius={radius}
+                  areaSqKm={selectedDong ? dongAreaSqKm : null}
+                  ageFilter={demoAgeFilter}
+                  onAgeFilterChange={setDemoAgeFilter}
+                />
               </section>
 
               <div className="g-section-divider" />
@@ -932,7 +1068,10 @@ export default function GisPage() {
                   <h2 className="g-sec-title">Historical Context</h2>
                   <p className="g-sec-desc">역사적 맥락 · 도시 정체성의 층위</p>
                 </div>
-                <HistoricalContextContent landmarks={filteredLandmarks} clickedPoint={clickedPoint} />
+                <HistoricalContextContent
+                  landmarks={filteredLandmarks}
+                  clickedPoint={clickedPoint || (selectedDong && dongCentroid ? [dongCentroid[1], dongCentroid[0]] : null)}
+                />
               </section>
 
               <div style={{ height: '65vh' }} />
@@ -962,10 +1101,19 @@ export default function GisPage() {
               opacity={visibleSection === 'figground' ? 1 : 0.55}
             />
             <ZoomControl position="bottomright" />
-            <MapClick onClick={p => { setClickedPoint(p); setMobileSheet(1) }} />
+            <MapClick onClick={p => {
+              // 동이 선택된 상태에서 답사영역 밖을 클릭하면 → 동 해제 + 반경분석으로 전환.
+              // (동 폴리곤 클릭 자체는 SurveyAreaLayer 에서 stopPropagation 됨)
+              if (selectedDong) {
+                setSelectedDong(null)
+                setCircleEnabled(true)
+              }
+              setClickedPoint(p)
+              setMobileSheet(1)
+            }} />
 
-            {/* 첫 진입 안내 펄스 — clickedPoint 가 없을 때만 (분석 모드 + 반경 분석 모드) */}
-            {!clickedPoint && mode === 'analysis' && circleEnabled && (
+            {/* 첫 진입 안내 펄스 — clickedPoint 가 없을 때만 (분석 모드 + 반경 분석 모드, 동 미선택) */}
+            {!clickedPoint && mode === 'analysis' && circleEnabled && !selectedDong && (
               <PulseGuide
                 position={CENTER}
                 onClick={() => { setClickedPoint(CENTER); setMobileSheet(1) }}
@@ -978,11 +1126,11 @@ export default function GisPage() {
                 data={buildingData}
                 styleFn={buildingStyle}
                 onEachBuilding={onEachBuilding}
-                deps={`${visibleSection}-${filteredSet.size}-${clickedPoint?.[0]}-${ageFilterYear}-${circleEnabled}-${missingFilter}-${surveyTypes.building}-${surveyedPnuSet.size}`}
+                deps={`${visibleSection}-${filteredSet.size}-${clickedPoint?.[0]}-${ageFilterYear}-${circleEnabled}-${missingFilter}-${surveyTypes.building}-${surveyedPnuSet.size}-${selectedDong || ''}`}
               />
             )}
 
-            {clickedPoint && circleEnabled && (
+            {clickedPoint && circleEnabled && !selectedDong && (
               <DraggableCenter
                 position={clickedPoint}
                 radius={radius}
@@ -990,36 +1138,48 @@ export default function GisPage() {
               />
             )}
 
-            {visibleSection === 'pedshed' && Object.keys(amenities).length > 0 && circleEnabled && (
+            {visibleSection === 'pedshed' && Object.keys(amenities).length > 0 && (circleEnabled || selectedDong) && (
               <AmenityLayer amenities={amenities} enabledCats={enabledCats} />
             )}
 
-            {visibleSection === 'landuse' && zoningData && (clickedPoint || !circleEnabled) && (
-              <ZoningLayer zoningData={zoningData} filteredZoning={!circleEnabled ? zoningData.features : filteredZoning} />
+            {visibleSection === 'landuse' && zoningData && (clickedPoint || !circleEnabled || selectedDong) && (
+              <ZoningLayer zoningData={zoningData} filteredZoning={!circleEnabled && !selectedDong ? zoningData.features : filteredZoning} />
             )}
 
-            {visibleSection === 'commerce' && commerceData && (clickedPoint || !circleEnabled) && (
+            {visibleSection === 'commerce' && commerceData && (clickedPoint || !circleEnabled || selectedDong) && (
               <CommerceLayer
                 commerceData={commerceData}
-                filteredCommerce={!circleEnabled ? commerceData.areas : filteredCommerce}
+                filteredCommerce={!circleEnabled && !selectedDong ? commerceData.areas : filteredCommerce}
               />
             )}
 
-            {visibleSection === 'demo' && demoData && (clickedPoint || !circleEnabled) && (
-              <DemoLayer dots={!circleEnabled ? demoData.dots : filteredDots} ageFilter={demoAgeFilter} />
+            {visibleSection === 'demo' && demoData && (clickedPoint || !circleEnabled || selectedDong) && (
+              <DemoLayer dots={!circleEnabled && !selectedDong ? demoData.dots : filteredDots} ageFilter={demoAgeFilter} />
             )}
 
-            {visibleSection === 'transit' && transitData && (clickedPoint || !circleEnabled) && (
+            {visibleSection === 'transit' && transitData && (clickedPoint || !circleEnabled || selectedDong) && (
               <TransitLayer
                 transitData={transitData}
-                filteredTransit={!circleEnabled ? { busStops: transitData.busStops, subwayLines: transitData.subwayLines } : filteredTransit}
+                filteredTransit={!circleEnabled && !selectedDong ? { busStops: transitData.busStops, subwayLines: transitData.subwayLines } : filteredTransit}
                 clickedPoint={clickedPoint}
                 radius={radius}
               />
             )}
 
             {showSurveyArea && (
-              <SurveyAreaLayer data={surveyAreaData} />
+              <SurveyAreaLayer
+                selectedDong={selectedDong}
+                onSelect={(id) => {
+                  setSelectedDong(id)
+                  // 동 선택 시 분석 원/클릭 마커가 겹쳐 보이지 않게 정리
+                  if (id) {
+                    setClickedPoint(null)
+                    setSelectedBuilding(null)
+                    setSelectedSurvey(null)
+                    setMobileSheet(1)
+                  }
+                }}
+              />
             )}
 
             {showParks && (
@@ -1027,7 +1187,12 @@ export default function GisPage() {
             )}
 
             {visibleSection === 'heritage' && (
-              <LandmarkLayer landmarks={filteredLandmarks} clickedPoint={clickedPoint} radius={radius} circleEnabled={circleEnabled} />
+              <LandmarkLayer
+                landmarks={filteredLandmarks}
+                clickedPoint={clickedPoint || (selectedDong && dongCentroid ? [dongCentroid[1], dongCentroid[0]] : null)}
+                radius={radius}
+                circleEnabled={circleEnabled || !!selectedDong}
+              />
             )}
 
             {/* 현장조사 — 점/도로 마커 (건물은 폴리곤 하이라이트로 별도 처리) */}
@@ -1822,12 +1987,13 @@ const AGE_LABELS = {
   'age_60_plus': '60세 이상',
 }
 
-function DemographicsContent({ dots, demoData, radius, ageFilter, onAgeFilterChange }) {
+function DemographicsContent({ dots, demoData, radius, areaSqKm: areaSqKmProp, ageFilter, onAgeFilterChange }) {
   if (!demoData) return <div className="g-coming-soon">데이터 로딩 중...</div>
 
   const dotPer = demoData.dotPer || 10
   const totalPop = dots.length * dotPer
-  const areaSqKm = Math.PI * (radius / 1000) ** 2
+  // 동 모드면 폴리곤 면적, 원 모드면 πr² 사용
+  const areaSqKm = areaSqKmProp != null ? areaSqKmProp : (Math.PI * (radius / 1000) ** 2)
   const density = areaSqKm > 0 ? Math.round(totalPop / areaSqKm) : 0
 
   // 연령대별 집계
@@ -2310,28 +2476,72 @@ function LandmarkLayer({ landmarks, clickedPoint, radius, circleEnabled }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  답사 영역 레이어
+//  답사 영역 레이어 — 황학동 / 신당5동 두 폴리곤
+//   - selectedDong=null : 둘 다 반투명으로 색칠 (각자 동 색)
+//   - selectedDong='hwanghak' : 황학동만 진하게, 신당5동은 흐리게
+//   - selectedDong='sindang5' : 그 반대
+//   - 폴리곤 클릭 시 onSelect 호출 (같은 동 다시 클릭하면 해제)
 // ═══════════════════════════════════════════════════════════════
-function SurveyAreaLayer({ data }) {
+function SurveyAreaLayer({ selectedDong, onSelect }) {
   const map = useMap()
-  const layerRef = useRef(null)
+  const groupRef = useRef(null)
 
   useEffect(() => {
-    if (layerRef.current) map.removeLayer(layerRef.current)
-    const layer = L.geoJSON(data, {
-      style: {
-        color: '#f1c40f',
-        weight: 3,
-        dashArray: '8 4',
-        fillColor: '#f1c40f',
-        fillOpacity: 0.08,
-      },
-      interactive: false,
-    }).addTo(map)
-    layer.bringToFront()
-    layerRef.current = layer
-    return () => { map.removeLayer(layer) }
-  }, [map, data])
+    if (groupRef.current) map.removeLayer(groupRef.current)
+    const group = L.layerGroup().addTo(map)
+    groupRef.current = group
+
+    for (const meta of Object.values(DONG_META)) {
+      const isSelected = selectedDong === meta.id
+      const isOther = selectedDong && selectedDong !== meta.id
+      const style = isOther
+        ? { color: '#bbb', weight: 1, fillColor: '#999', fillOpacity: 0.02, opacity: 0.3 }
+        : {
+            color: meta.color,
+            weight: isSelected ? 2.5 : 1.5,
+            fillColor: meta.color,
+            fillOpacity: isSelected ? 0.18 : 0.09,
+            opacity: 0.75,
+          }
+      const layer = L.geoJSON(meta.feature, {
+        style,
+        // bubblingMouseEvents=false 로 두면 폴리곤 클릭이 맵 클릭(MapClick)으로 전파되지 않음.
+        // 자체 click 핸들러에서 onSelect 만 호출.
+        onEachFeature: (_, lyr) => {
+          lyr.options.bubblingMouseEvents = false
+          lyr.on('mouseover', () => {
+            lyr.setStyle({ weight: isOther ? 1.5 : (isSelected ? 3 : 2.5), fillOpacity: isOther ? 0.04 : (isSelected ? 0.22 : 0.14) })
+            const el = lyr.getElement?.()
+            if (el) el.style.cursor = 'pointer'
+          })
+          lyr.on('mouseout', () => {
+            lyr.setStyle(style)
+          })
+          lyr.on('click', (e) => {
+            L.DomEvent.stopPropagation(e)
+            onSelect(meta.id === selectedDong ? null : meta.id)
+          })
+        },
+      }).addTo(group)
+      // 이름 라벨 (동 선택 안 됐을 때만 보이게)
+      if (!selectedDong) {
+        try {
+          const [lng, lat] = turf.centroid(meta.feature).geometry.coordinates
+          L.marker([lat, lng], {
+            interactive: false,
+            icon: L.divIcon({
+              className: 'g-dong-label',
+              html: `<span style="color:${meta.color}">${meta.name}</span>`,
+              iconSize: [0, 0],
+            }),
+          }).addTo(group)
+        } catch { /* skip */ }
+      }
+      layer.bringToFront()
+    }
+
+    return () => { map.removeLayer(group) }
+  }, [map, selectedDong, onSelect])
 
   return null
 }

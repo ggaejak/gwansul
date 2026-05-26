@@ -1319,10 +1319,61 @@ html.gis-mode .hamburger span    { background: #555 !important; }
 }
 .g-survey-toggle:hover { background: #fff; color: #555; }
 .g-survey-toggle.active {
-  background: #f1c40f;
-  border-color: #f1c40f;
-  color: #333;
+  background: #111;
+  border-color: #111;
+  color: #fff;
   font-weight: 600;
+}
+
+/* ─── 답사 영역 동 라벨 (지도 위) ───────────────────────────── */
+.g-dong-label {
+  pointer-events: none;
+  background: transparent;
+  border: none;
+}
+.g-dong-label > span {
+  display: inline-block;
+  transform: translate(-50%, -50%);
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  white-space: nowrap;
+}
+
+/* ─── 동 분석 배너 (좌측 패널) ──────────────────────────────── */
+.g-dong-banner {
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  background: #f9fafb;
+  border-left: 4px solid #888;
+  border-radius: 4px;
+}
+.g-dong-banner-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.g-dong-banner-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.g-dong-banner-name {
+  font-weight: 700;
+  font-size: 14px;
+  color: #111;
+}
+.g-dong-banner-area {
+  font-size: 12px;
+  color: #888;
+  margin-left: auto;
+  margin-right: 6px;
 }
 
 /* ─── Parks (녹지) Toggle ──────────────────────────────────── */
